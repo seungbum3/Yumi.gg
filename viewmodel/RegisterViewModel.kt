@@ -23,8 +23,4 @@ class RegisterViewModel : ViewModel() {
             val user = User(id, nickname, password, phone)
             userRepository.registerUser(user, callback)
         }
-
-    fun registerUser(id: String, password: String, nickname: String, callback: (Boolean, String?) -> Unit) {
-
-    }
 }

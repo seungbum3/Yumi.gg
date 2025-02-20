@@ -166,7 +166,7 @@
     <androidx.cardview.widget.CardView
         android:id="@+id/favoritesCard"
         android:layout_width="0dp"
-        android:layout_height="wrap_content"
+        android:layout_height="200dp"
         android:layout_marginTop="8dp"
         app:cardCornerRadius="20dp"
         app:cardElevation="6dp"
@@ -175,13 +175,32 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <!-- 즐겨찾기 RecyclerView -->
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/favoritesList"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_height="match_parent"
             android:nestedScrollingEnabled="false"
             android:overScrollMode="never"/>
-    </androidx.cardview.widget.CardView>
+
+        <!-- 빈 목록일 때 표시할 메시지 -->
+        <TextView
+            android:id="@+id/emptyFavoritesText"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:text="즐겨찾기한 유저가 없습니다."
+            android:textColor="#80929F"
+            android:textSize="14sp"
+            android:gravity="center"
+            android:visibility="gone"/>
+    </FrameLayout>
+
+</androidx.cardview.widget.CardView>
+
 
     <!-- 하단 로고 및 아이콘 -->
     <LinearLayout

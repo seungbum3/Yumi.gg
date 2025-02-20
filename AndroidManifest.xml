@@ -37,6 +37,9 @@
         <activity
             android:name=".MainpageActivity"
             android:exported="true" />
+        <activity
+            android:name=".ChatActivity"
+            android:exported="false" />
 
     </application>
 

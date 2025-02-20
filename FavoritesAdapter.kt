@@ -8,6 +8,7 @@ import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import com.google.firebase.firestore.FirebaseFirestore
 import android.util.Log
+import com.google.firebase.firestore.SetOptions
 
 
 class FavoritesAdapter(
@@ -34,17 +35,13 @@ class FavoritesAdapter(
 
         holder.favoriteName.text = summonerName
 
-        // 🔹 처음 로딩할 때 Firestore에서 가져온 상태 반영
+        // 🔹 Firestore에서 가져온 즐겨찾기 상태를 초기화
         if (!favoriteStatus.containsKey(summonerName)) {
             favoriteStatus[summonerName] = true // 기본적으로 즐겨찾기 활성화
         }
 
         // 🔹 현재 상태에 따라 UI 변경
-        if (favoriteStatus[summonerName] == true) {
-            holder.favoriteIcon.setImageResource(R.drawable.ic_star) // ⭐ 채워진 별
-        } else {
-            holder.favoriteIcon.setImageResource(R.drawable.ic_star_empty) // ☆ 빈 별
-        }
+        updateFavoriteIcon(holder.favoriteIcon, favoriteStatus[summonerName] ?: true)
 
         // 🔹 별표 클릭 이벤트 (UI 상태만 변경)
         holder.favoriteIcon.setOnClickListener {
@@ -52,15 +49,26 @@ class FavoritesAdapter(
             favoriteStatus[summonerName] = !isFavorite // 상태 반전
 
             // UI 업데이트
-            if (!isFavorite) {
-                holder.favoriteIcon.setImageResource(R.drawable.ic_star) // ⭐ 즐겨찾기 추가
-            } else {
-                holder.favoriteIcon.setImageResource(R.drawable.ic_star_empty) // ☆ 즐겨찾기 해제
-            }
+            updateFavoriteIcon(holder.favoriteIcon, !isFavorite)
         }
     }
 
     override fun getItemCount(): Int = favoriteList.size
+
+
+    fun updateFavorites(newList: MutableList<HashMap<String, String>>) {
+        favoriteList.clear()
+        favoriteList.addAll(newList)
+        notifyDataSetChanged()
+    }
+    // 🔹 별표 아이콘 변경 함수
+    private fun updateFavoriteIcon(icon: ImageView, isFavorite: Boolean) {
+        if (isFavorite) {
+            icon.setImageResource(R.drawable.ic_star) // ⭐ 즐겨찾기 추가
+        } else {
+            icon.setImageResource(R.drawable.ic_star_empty) // ☆ 즐겨찾기 해제
+        }
+    }
 
     // 🔹 마이페이지를 떠날 때 Firestore에 변경 사항 반영하는 함수
     fun syncFavoritesWithFirestore(db: FirebaseFirestore, onComplete: () -> Unit) {
@@ -71,16 +79,13 @@ class FavoritesAdapter(
                 .collection("favorites").document(summonerName)
 
             if (isFavorite) {
-                // 🔹 즐겨찾기 유지 → Firestore에 추가
                 val favoriteData = hashMapOf("summonerName" to summonerName)
-                batch.set(docRef, favoriteData)
+                batch.set(docRef, favoriteData, SetOptions.merge()) // ✅ 기존 데이터와 병합 (중복 방지)
             } else {
-                // 🔹 즐겨찾기 해제 → Firestore에서 삭제
                 batch.delete(docRef)
             }
         }
 
-        // 🔹 Firestore에 변경 사항 반영
         batch.commit()
             .addOnSuccessListener {
                 Log.d("Firestore", "즐겨찾기 동기화 완료")
@@ -90,6 +95,5 @@ class FavoritesAdapter(
                 Log.e("Firestore", "즐겨찾기 동기화 실패", e)
             }
     }
+
 }
-
-

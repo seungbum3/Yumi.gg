@@ -36,9 +36,12 @@ class JoinActivity : AppCompatActivity() {
         val phoneInput = findViewById<EditText>(R.id.editTextPhoneNumber)
         val registerButton = findViewById<Button>(R.id.btnLogin)
 
-        // 🔹 아이디 중복 확인
         findViewById<Button>(R.id.Checkbtn).setOnClickListener {
-            val id = idInput.text.toString()
+            val id = idInput.text.toString().trim()
+            if (id.isEmpty()) {
+                Toast.makeText(this, "아이디를 입력해주세요.", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
             viewModel.checkId(id) { isAvailable ->
                 if (isAvailable) {
                     Toast.makeText(this, "사용 가능한 아이디입니다.", Toast.LENGTH_SHORT).show()
@@ -48,9 +51,12 @@ class JoinActivity : AppCompatActivity() {
             }
         }
 
-        // 🔹 닉네임 중복 확인
         findViewById<Button>(R.id.NameCheckbtn).setOnClickListener {
-            val nickname = nicknameInput.text.toString()
+            val nickname = nicknameInput.text.toString().trim()
+            if (nickname.isEmpty()) {
+                Toast.makeText(this, "닉네임을 입력해주세요.", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
             viewModel.checkNickname(nickname) { isAvailable ->
                 if (isAvailable) {
                     Toast.makeText(this, "사용 가능한 닉네임입니다.", Toast.LENGTH_SHORT).show()
@@ -59,6 +65,7 @@ class JoinActivity : AppCompatActivity() {
                 }
             }
         }
+
 
         // 🔹 회원가입 버튼 클릭
         registerButton.setOnClickListener {
