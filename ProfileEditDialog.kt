@@ -20,10 +20,25 @@ import android.content.Context
 import android.util.Log
 import com.bumptech.glide.Glide
 import com.google.firebase.firestore.DocumentReference
+import com.google.firebase.firestore.SetOptions
 import com.google.firebase.storage.FirebaseStorage
-import kotlinx.coroutines.*
 
 class ProfileEditDialog : DialogFragment() {
+    interface ProfileUpdateListener {
+        fun onProfileUpdated(nickname: String, bio: String, imageUrl: String?)
+    }
+
+    var listener: ProfileUpdateListener? = null
+
+    override fun onAttach(context: Context) {
+        super.onAttach(context)
+        listener = context as? ProfileUpdateListener
+    }
+
+    override fun onDetach() {
+        super.onDetach()
+        listener = null
+    }
 
     private lateinit var profileImageView: ImageView
     private lateinit var editNickname: EditText
@@ -37,7 +52,11 @@ class ProfileEditDialog : DialogFragment() {
     private var originalNickname: String = ""
     private var isNicknameChecked = false
     private var isNicknameAvailable = false
-    private var userId: String = ""
+    private var userEmail: String = ""
+
+
+
+
 
     override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
         val dialog = Dialog(requireContext())
@@ -55,11 +74,11 @@ class ProfileEditDialog : DialogFragment() {
             Log.d("FirebaseAuth", "✅ 로그인된 사용자 UID: ${currentUser.uid}")
         }
 
-        // 로그인한 사용자의 ID 가져오기 (사용자 지정 아이디, 예: "tpcks571")
+        // 로그인한 사용자의 이메일 가져오기
         val sharedPref = requireContext().getSharedPreferences("UserPrefs", Context.MODE_PRIVATE)
-        userId = sharedPref.getString("loggedInUserId", null) ?: ""
+        userEmail = sharedPref.getString("loggedInUserId", null) ?: ""
 
-        if (userId.isEmpty()) {
+        if (userEmail.isEmpty()) {
             Toast.makeText(context, "로그인 정보가 없습니다!", Toast.LENGTH_SHORT).show()
             dismiss()
         }
@@ -98,24 +117,24 @@ class ProfileEditDialog : DialogFragment() {
     private fun loadUserProfile() {
         val db = FirebaseFirestore.getInstance()
         val sharedPref = requireContext().getSharedPreferences("UserPrefs", Context.MODE_PRIVATE)
-        val userId = sharedPref.getString("loggedInUserId", null) ?: ""
+        val userEmail = sharedPref.getString("loggedInUserId", null) ?: ""
 
-        if (userId.isEmpty()) {
+        if (userEmail.isEmpty()) {
             Toast.makeText(context, "로그인 정보가 없습니다!", Toast.LENGTH_SHORT).show()
             dismiss()
             return
         }
-        Log.d("Firestore", "🔍 Firestore에서 사용자 정보 불러오기 시작: $userId")
+        Log.d("Firestore", "🔍 Firestore에서 사용자 정보 불러오기 시작: $userEmail")
 
         // UID 기반 쿼리는 제거하고, 바로 사용자 정보 불러오기
-        fetchUserProfileData(userId)
+        fetchUserProfileData(userEmail)
     }
 
-    private fun fetchUserProfileData(userId: String) {
+    private fun fetchUserProfileData(userEmail: String) {
         val db = FirebaseFirestore.getInstance()
 
         // users 컬렉션에서 닉네임 가져오기
-        db.collection("users").document(userId)
+        db.collection("user_profiles").document(userEmail)
             .get()
             .addOnSuccessListener { document ->
                 if (document.exists()) {
@@ -132,29 +151,36 @@ class ProfileEditDialog : DialogFragment() {
             }
 
         // user_profiles 컬렉션에서 자기소개(myinfo)와 프로필 이미지 URL(profileImageUrl) 가져오기
-        db.collection("user_profiles").document(userId)
+        db.collection("user_profiles").document(userEmail)
             .get()
             .addOnSuccessListener { document ->
                 if (document.exists()) {
-                    val bio = document.getString("myinfo") ?: "자기소개 없음"
+                    val bio = document.getString("myinfo") ?: ""
                     editBio.setText(bio)
-                    Log.d("Firestore", "✅ 자기소개 로드 성공: $bio")
-                    // 프로필 이미지 URL이 존재하면 불러오기 (Glide 라이브러리 사용 예시)
+
                     val imageUrl = document.getString("profileImageUrl")
-                    if (!imageUrl.isNullOrEmpty()) {
+                    val defaultProfileUrl = "gs://yumi-5f5c0.firebasestorage.app/default_profile.jpg"
+
+                    val finalUrl = if (!imageUrl.isNullOrEmpty()) imageUrl else defaultProfileUrl
+                    convertGsUrlToHttp(finalUrl) { httpUrl ->
                         Glide.with(this)
-                            .load(imageUrl)
-                            .placeholder(R.drawable.default_profile) // 기본 이미지 리소스
-                            .error(R.drawable.default_profile)
+                            .load(httpUrl)
                             .circleCrop()
                             .into(profileImageView)
                     }
-                } else {
-                    Log.e("Firestore", "❌ user_profiles 컬렉션에서 사용자 정보 없음!")
                 }
             }
+    }
+
+    private fun convertGsUrlToHttp(gsUrl: String, onComplete: (String?) -> Unit) {
+        FirebaseStorage.getInstance().getReferenceFromUrl(gsUrl)
+            .downloadUrl
+            .addOnSuccessListener { downloadUri ->
+                onComplete(downloadUri.toString())
+            }
             .addOnFailureListener { e ->
-                Log.e("Firestore", "❌ user_profiles 컬렉션 데이터 가져오기 실패", e)
+                Log.e("URL Conversion", "gs:// URL 변환 실패", e)
+                onComplete(null)
             }
     }
 
@@ -217,77 +243,46 @@ class ProfileEditDialog : DialogFragment() {
 
 
     private fun saveProfileToFirestore(nickname: String, bio: String, imageUri: Uri?) {
-        val db = FirebaseFirestore.getInstance()
         val sharedPref = requireContext().getSharedPreferences("UserPrefs", Context.MODE_PRIVATE)
-        // 사용자 지정 아이디(예: "tpcks571")를 Firestore 문서 ID로 사용
-        val userId = sharedPref.getString("loggedInUserId", null)
-
-        if (userId == null) {
-            Log.e("Firestore", "❌ SharedPreferences에서 사용자 ID를 찾을 수 없음!")
-            return
-        }
-
-        val userRef = db.collection("users").document(userId)
-        val userProfileRef = db.collection("user_profiles").document(userId)
-        val profileUpdate = mutableMapOf<String, Any>("myinfo" to bio)
-
-        if (nickname.isNotEmpty()) {
-            userRef.update(mapOf("nickname" to nickname))
-                .addOnSuccessListener {
-                    Log.d("Firestore", "✅ 닉네임 업데이트 성공!")
-                }
-                .addOnFailureListener { e ->
-                    Log.e("Firestore", "❌ 닉네임 업데이트 실패", e)
-                }
-        }
+        val userId = sharedPref.getString("loggedInUserId", null) ?: return
+        val profileUpdate = mutableMapOf<String, Any>("myinfo" to bio, "nickname" to nickname)
 
         if (imageUri != null) {
-            // 이미지가 선택된 경우 Firebase Storage에 업로드 진행
             uploadProfileImage(imageUri) { downloadUrl ->
                 if (downloadUrl != null) {
                     profileUpdate["profileImageUrl"] = downloadUrl
                 }
-                updateUserProfile(userProfileRef, profileUpdate, userId)
+                updateUserProfile(userId, profileUpdate)
             }
         } else {
-            updateUserProfile(userProfileRef, profileUpdate, userId)
+            updateUserProfile(userId, profileUpdate)
         }
     }
 
-    private fun updateUserProfile(
-        userProfileRef: DocumentReference,
-        profileUpdate: MutableMap<String, Any>,
-        userId: String
-    ) {
-        userProfileRef.get()
-            .addOnSuccessListener { document ->
-                if (document.exists()) {
-                    userProfileRef.update(profileUpdate)
-                        .addOnSuccessListener {
-                            Log.d("Firestore", "✅ 프로필 업데이트 성공! (문서 존재)")
-                            (activity as? MyPageActivity)?.refreshProfileFromFirestore(userId)
-                            dismiss()
-                        }
-                        .addOnFailureListener {
-                            Log.e("Firestore", "❌ 프로필 업데이트 실패!", it)
-                        }
-                } else {
-                    profileUpdate["profileImageUrl"] = profileUpdate["profileImageUrl"] ?: ""
-                    userProfileRef.set(profileUpdate)
-                        .addOnSuccessListener {
-                            Log.d("Firestore", "✅ 새 프로필 문서 생성 후 업데이트 성공!")
-                            (activity as? MyPageActivity)?.refreshProfileFromFirestore(userId)
-                            dismiss()
-                        }
-                        .addOnFailureListener {
-                            Log.e("Firestore", "❌ 새 프로필 문서 생성 실패!", it)
-                        }
-                }
+
+    private fun updateUserProfile(userId: String, profileUpdate: Map<String, Any>) {
+        val userProfileRef = FirebaseFirestore.getInstance()
+            .collection("user_profiles")
+            .document(userId)
+
+        userProfileRef.set(profileUpdate, SetOptions.merge())
+            .addOnSuccessListener {
+                Toast.makeText(context, "프로필 저장 성공!", Toast.LENGTH_SHORT).show()
+
+                // Listener를 통해 UI 즉시 갱신
+                val nickname = profileUpdate["nickname"] as? String ?: ""
+                val bio = profileUpdate["myinfo"] as? String ?: ""
+                val imageUrl = profileUpdate["profileImageUrl"] as? String
+
+                listener?.onProfileUpdated(nickname, bio, imageUrl)
+
+                dismiss()
             }
-            .addOnFailureListener {
-                Log.e("Firestore", "❌ Firestore에서 프로필 문서 조회 실패!", it)
+            .addOnFailureListener { e ->
+                Toast.makeText(context, "프로필 저장 실패: ${e.message}", Toast.LENGTH_SHORT).show()
             }
     }
+
 
     private fun selectImage() {
         val intent = Intent(Intent.ACTION_PICK)
@@ -319,7 +314,7 @@ class ProfileEditDialog : DialogFragment() {
         }
 
         val db = FirebaseFirestore.getInstance()
-        db.collection("users")
+        db.collection("user_profiles")
             .whereEqualTo("nickname", nickname)
             .get()
             .addOnSuccessListener { documents ->

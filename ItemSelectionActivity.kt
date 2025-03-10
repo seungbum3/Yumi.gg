@@ -1,30 +1,36 @@
 package com.example.yumi
 
 import android.app.AlertDialog
+import android.graphics.Color
+import android.graphics.drawable.ColorDrawable
 import android.os.Bundle
 import android.util.Log
-import android.widget.Button
-import android.widget.ImageView
-import android.widget.Toast
+import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewGroup
+import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.example.yumi.adapters.ItemAdapter
 import com.example.yumi.models.Item
-import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.auth.FirebaseAuth
-
+import com.google.firebase.firestore.FirebaseFirestore
+import android.text.Spannable
+import android.text.SpannableString
+import android.text.style.ForegroundColorSpan
 
 class ItemSelectionActivity : AppCompatActivity() {
 
     private lateinit var itemRecyclerView: RecyclerView
     private lateinit var itemAdapter: ItemAdapter
     private lateinit var slotRecyclerView: RecyclerView
-    private lateinit var firestore: FirebaseFirestore
+    lateinit var firestore: FirebaseFirestore
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_item_selection)
+
         // 현재 로그인한 사용자 UID 출력 예시
         val user = FirebaseAuth.getInstance().currentUser
         if (user != null) {
@@ -38,9 +44,7 @@ class ItemSelectionActivity : AppCompatActivity() {
         firestore = FirebaseFirestore.getInstance()
 
         val btnBack: ImageView = findViewById(R.id.btnBack)
-        btnBack.setOnClickListener {
-            finish()
-        }
+        btnBack.setOnClickListener { finish() }
 
         // 상단 6칸 슬롯 RecyclerView 설정
         setupSlotRecyclerView()
@@ -49,56 +53,130 @@ class ItemSelectionActivity : AppCompatActivity() {
         itemRecyclerView.layoutManager = GridLayoutManager(this, 5)
         fetchItemsFromFirestore()
 
-        // 저장, 불러오기 버튼 참조 (activity_item_selection.xml에 추가되어 있어야 함)
+        // 저장, 불러오기 버튼 참조
         val btnSaveSlots = findViewById<Button>(R.id.btnSaveSlots)
         val btnLoadSlots = findViewById<Button>(R.id.btnLoadSlots)
 
-        btnSaveSlots.setOnClickListener {
-            saveConfiguration()
-        }
-
-        btnLoadSlots.setOnClickListener {
-            showLoadConfigurationsDialog()
-        }
+        btnSaveSlots.setOnClickListener { saveConfiguration() }
+        btnLoadSlots.setOnClickListener { showLoadConfigurationsDialog() }
     }
 
-
-
+    // 저장된 구성 데이터 클래스 (6칸 슬롯)
     data class SavedConfiguration(
-        val configName: String = "",  // 구성 이름(문서 ID로도 활용 가능)
+        val configName: String = "",  // 구성 이름(문서 ID로 활용)
         val slots: List<Item?> = List(6) { null }  // 6칸 슬롯 데이터
     )
 
+    // 저장 기능: 최소 1개 이상의 아이템이 선택되어야 저장
     private fun saveConfiguration() {
         val adapter = slotRecyclerView.adapter as? SlotAdapter ?: return
         val currentSlots = adapter.getSlotItems()
 
-        val userId = getUserId()  // SharedPreferences에서 커스텀 ID 가져오기
+        // 모든 슬롯이 null이면 저장 불가
+        if (currentSlots.all { it == null }) {
+            Toast.makeText(this, "최소 하나 이상의 아이템을 선택해주세요.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val userId = getUserId()  // 로그인한 유저 ID 가져오기
         if (userId.isEmpty()) {
             Log.e("SaveConfig", "저장할 유저 ID가 없습니다.")
             return
         }
 
-        val configName = "MyBuild_${System.currentTimeMillis()}"
+        // custom_save_dialog.xml 파일을 inflate하여 커스텀 뷰로 사용
+        val customView = layoutInflater.inflate(R.layout.custom_save_dialog, null)
+        val editText = customView.findViewById<EditText>(R.id.editTextDialogName)
+        val btnSave = customView.findViewById<Button>(R.id.btnSave)
+        val btnCancel = customView.findViewById<Button>(R.id.btnCancel)
 
-        val config = SavedConfiguration(
-            configName = configName,
-            slots = currentSlots
-        )
+        // 타이틀 텍스트 색상은 XML에서 이미 설정했다고 가정
+        val dialog = AlertDialog.Builder(this)
+            .setView(customView)
+            .create()
 
-        val configCollection = firestore.collection("users")
-            .document(userId)
-            .collection("savedConfigurations")
-
-        configCollection.document(configName).set(config)
-            .addOnSuccessListener {
-                Toast.makeText(this, "구성 저장 성공", Toast.LENGTH_SHORT).show()
+        // 저장 버튼 클릭 이벤트 처리
+        btnSave.setOnClickListener {
+            val customName = editText.text.toString().trim()
+            if (customName.isEmpty()) {
+                Toast.makeText(this, "구성 이름을 입력해주세요.", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
             }
-            .addOnFailureListener { e ->
-                Log.e("SaveConfig", "구성 저장 실패", e)
-                Toast.makeText(this, "구성 저장 실패: ${e.message}", Toast.LENGTH_SHORT).show()
-            }
+            val config = SavedConfiguration(
+                configName = customName,
+                slots = currentSlots
+            )
+            firestore.collection("users")
+                .document(userId)
+                .collection("savedConfigurations")
+                .document(customName)
+                .set(config)
+                .addOnSuccessListener {
+                    Toast.makeText(this, "구성 저장 성공", Toast.LENGTH_SHORT).show()
+                    dialog.dismiss()
+                }
+                .addOnFailureListener { e ->
+                    Log.e("SaveConfig", "구성 저장 실패", e)
+                    Toast.makeText(this, "구성 저장 실패: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+        }
+
+        // 취소 버튼 클릭 이벤트 처리
+        btnCancel.setOnClickListener { dialog.dismiss() }
+
+        dialog.show()
     }
+
+    inner class SavedBuildAdapter(
+        private val context: ItemSelectionActivity,
+        private val configList: MutableList<SavedConfiguration>
+    ) : BaseAdapter() {
+        override fun getCount(): Int = configList.size
+        override fun getItem(position: Int): Any = configList[position]
+        override fun getItemId(position: Int): Long = position.toLong()
+        override fun getView(position: Int, convertView: View?, parent: ViewGroup?): View {
+            val view: View = convertView ?: LayoutInflater.from(context)
+                .inflate(R.layout.item_saved_build, parent, false)
+            val tvBuildName = view.findViewById<TextView>(R.id.tvBuildName)
+            val ivDelete = view.findViewById<ImageView>(R.id.ivDelete)
+
+            val config = configList[position]
+            tvBuildName.text = config.configName
+
+            // 리스트 아이템 클릭 시 구성 불러오기
+            view.setOnClickListener {
+                val adapter = slotRecyclerView.adapter as? SlotAdapter
+                adapter?.setSlots(config.slots)
+                Toast.makeText(context, "구성 불러오기 성공", Toast.LENGTH_SHORT).show()
+                // 다이얼로그 닫기
+                (parent as? ListView)?.let { listView ->
+                    (listView.parent as? AlertDialog)?.dismiss()
+                }
+            }
+
+            // 삭제 버튼 클릭 시 해당 구성 삭제
+            ivDelete.setOnClickListener {
+                val userId = context.getUserId()
+                if (userId.isNotEmpty()) {
+                    firestore.collection("users")
+                        .document(userId)
+                        .collection("savedConfigurations")
+                        .document(config.configName)
+                        .delete()
+                        .addOnSuccessListener {
+                            Toast.makeText(context, "구성 삭제 성공", Toast.LENGTH_SHORT).show()
+                            configList.removeAt(position)
+                            notifyDataSetChanged()
+                        }
+                        .addOnFailureListener { e ->
+                            Toast.makeText(context, "구성 삭제 실패: ${e.message}", Toast.LENGTH_SHORT).show()
+                        }
+                }
+            }
+            return view
+        }
+    }
+
     private fun showLoadConfigurationsDialog() {
         val userId = getUserId()
         if (userId.isEmpty()) {
@@ -113,28 +191,41 @@ class ItemSelectionActivity : AppCompatActivity() {
         configCollection.get()
             .addOnSuccessListener { snapshot ->
                 val configList = snapshot.documents.mapNotNull { document ->
-                    // 구성 이름은 문서 ID를 사용하거나, configName 필드를 활용
                     document.toObject(SavedConfiguration::class.java)?.copy(configName = document.id)
-                }
+                }.toMutableList()
+
                 if (configList.isEmpty()) {
                     Toast.makeText(this, "저장된 구성이 없습니다.", Toast.LENGTH_SHORT).show()
                     return@addOnSuccessListener
                 }
 
-                // 구성 이름 배열 만들기
-                val configNames = configList.map { it.configName }.toTypedArray()
+                val listView = ListView(this)
+                val adapter = SavedBuildAdapter(this, configList)
+                listView.adapter = adapter
 
-                AlertDialog.Builder(this)
-                    .setTitle("불러올 구성을 선택하세요")
-                    .setItems(configNames) { dialog, which ->
-                        val selectedConfig = configList[which]
-                        // 선택된 구성의 슬롯 데이터를 SlotAdapter에 적용
-                        val adapter = slotRecyclerView.adapter as? SlotAdapter
-                        adapter?.setSlots(selectedConfig.slots)
-                        Toast.makeText(this, "구성 불러오기 성공", Toast.LENGTH_SHORT).show()
-                    }
+                // 타이틀 텍스트에 색상 변경 (80929F)
+                val titleText = SpannableString("불러올 구성을 선택하세요")
+                titleText.setSpan(
+                    ForegroundColorSpan(Color.parseColor("#80929F")),
+                    0,
+                    titleText.length,
+                    Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+                )
+
+                val dialog = AlertDialog.Builder(this)
+                    .setTitle(titleText)
+                    .setView(listView)
                     .setNegativeButton("취소", null)
-                    .show()
+                    .create()
+
+                dialog.show()
+
+                // 다이얼로그 전체 백그라운드 색상을 E7EBED로 변경
+                dialog.window?.setBackgroundDrawable(ColorDrawable(Color.parseColor("#E7EBED")))
+
+                // 취소 버튼 텍스트 색상을 80929F로 변경
+                dialog.getButton(AlertDialog.BUTTON_NEGATIVE)
+                    ?.setTextColor(Color.parseColor("#80929F"))
             }
             .addOnFailureListener { e ->
                 Log.e("LoadConfig", "구성 불러오기 실패", e)
@@ -179,7 +270,7 @@ class ItemSelectionActivity : AppCompatActivity() {
     private fun saveSlots() {
         val adapter = slotRecyclerView.adapter as? SlotAdapter ?: return
         val slots = adapter.getSlotItems() // SlotAdapter에서 추가할 메소드
-        val userId = getUserId()  // SharedPreferences에서 로그인한 유저 ID 가져오기
+        val userId = getUserId()  // 로그인한 유저 ID 가져오기
         if (userId.isEmpty()) {
             Log.e("SaveSlots", "저장할 유저 ID가 없습니다.")
             return
@@ -207,7 +298,6 @@ class ItemSelectionActivity : AppCompatActivity() {
                         Log.e("SaveSlots", "Slot $index 저장 실패", e)
                     }
             } else {
-                // 빈 슬롯이면 기존 문서가 있다면 삭제
                 savedItemsCollection.document(docId).delete()
                     .addOnSuccessListener {
                         Log.d("SaveSlots", "Slot $index 삭제 성공")
@@ -219,7 +309,7 @@ class ItemSelectionActivity : AppCompatActivity() {
         }
     }
 
-    // 불러오기 기능: Firestore에서 "savedItems" 하위 컬렉션 데이터를 불러와 슬롯 상태 업데이트
+    // 불러오기 기능: Firestore에서 "savedItems" 데이터를 불러와 슬롯 상태 업데이트
     private fun loadSlots() {
         val userId = getUserId()
         if (userId.isEmpty()) {
@@ -231,7 +321,6 @@ class ItemSelectionActivity : AppCompatActivity() {
             .collection("savedItems")
         savedItemsCollection.get()
             .addOnSuccessListener { querySnapshot ->
-                // 6칸 배열로 초기화 후, 불러온 데이터의 slotIndex에 맞게 채움
                 val loadedSlots = MutableList<Item?>(6) { null }
                 for (document in querySnapshot.documents) {
                     val slotIndex = document.getLong("slotIndex")?.toInt() ?: continue
@@ -241,7 +330,7 @@ class ItemSelectionActivity : AppCompatActivity() {
                     }
                 }
                 val adapter = slotRecyclerView.adapter as? SlotAdapter
-                adapter?.setSlots(loadedSlots) // SlotAdapter에 새 메소드 추가
+                adapter?.setSlots(loadedSlots)
             }
             .addOnFailureListener { e ->
                 Log.e("LoadSlots", "저장된 슬롯 불러오기 실패", e)

@@ -54,8 +54,8 @@
                 android:id="@+id/btnSaveSlots"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:backgroundTint="#E7EBED"
-                android:textColor="#80929F"
+                android:backgroundTint="#80929F"
+                android:textColor="#E7EBED"
                 android:text="저장"/>
 
             <Button
@@ -63,8 +63,8 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="불러오기"
-                android:backgroundTint="#E7EBED"
-                android:textColor="#80929F"
+                android:backgroundTint="#80929F"
+                android:textColor="#E7EBED"
                 android:layout_marginStart="16dp"/>
         </LinearLayout>
 </LinearLayout>
