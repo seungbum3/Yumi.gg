@@ -139,12 +139,29 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/friendsList"
+        <FrameLayout
             android:layout_width="match_parent"
-            android:layout_height="100dp"
-            android:nestedScrollingEnabled="false"
-            android:overScrollMode="never"/>
+            android:layout_height="100dp">
+
+            <!-- 친구 목록 RecyclerView -->
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/friendsList"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:nestedScrollingEnabled="false"
+                android:overScrollMode="never" />
+
+            <!-- 빈 친구 목록일 때 표시할 메시지 -->
+            <TextView
+                android:id="@+id/emptyFriendsText"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:text="친구 목록에 친구가 없습니다."
+                android:textColor="#80929F"
+                android:textSize="14sp"
+                android:gravity="center"
+                android:visibility="gone" />
+        </FrameLayout>
     </androidx.cardview.widget.CardView>
 
     <!-- 즐겨찾기 목록 제목 -->

@@ -12,22 +12,18 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import androidx.activity.viewModels
 
-
 class JoinActivity : AppCompatActivity() {
     private val viewModel: RegisterViewModel by viewModels()
     private lateinit var auth: FirebaseAuth
     private val db = FirebaseFirestore.getInstance()
+    private var isNicknameAvailable = false
 
-    // 중복 확인은 이제 인증 버튼에서 처리하므로, id 중복 검사는 제거합니다.
-    private var isNicknameAvailable = false  // 닉네임 중복 검사 결과 저장
-
-    // 클래스 수준에서 닉네임 중복 확인 함수 선언 (접근제한자 사용 가능)
+    // 닉네임 중복 검사: users 컬렉션에서 닉네임 필드로 체크
     private fun checkNicknameDuplicate(nickname: String, callback: (Boolean) -> Unit) {
         db.collection("users")
             .whereEqualTo("nickname", nickname)
             .get()
             .addOnSuccessListener { documents ->
-                // documents가 비어있으면 중복 없음
                 callback(documents.isEmpty)
             }
             .addOnFailureListener { e ->
@@ -60,19 +56,15 @@ class JoinActivity : AppCompatActivity() {
         val verifyEmailButton = findViewById<Button>(R.id.VerifyEmailbtn)
         val nameCheckButton = findViewById<Button>(R.id.NameCheckbtn)
 
-        val verificationStatusTextView = findViewById<TextView>(R.id.tvVerificationStatus)
-
         // 이메일 형식 체크: 이메일 형식이 맞으면 인증 버튼 활성화
         emailInput.addTextChangedListener(object : android.text.TextWatcher {
             override fun afterTextChanged(s: android.text.Editable?) {
                 val email = s.toString().trim()
                 verifyEmailButton.isEnabled = Patterns.EMAIL_ADDRESS.matcher(email).matches()
             }
-
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
         })
-
 
         nameCheckButton.setOnClickListener {
             val nickname = nicknameInput.text.toString().trim()
@@ -89,6 +81,7 @@ class JoinActivity : AppCompatActivity() {
                 }
             }
         }
+
         // "인증하기" 버튼 클릭 시, 중복 확인 후 이메일 인증 링크 전송
         verifyEmailButton.setOnClickListener {
             val email = emailInput.text.toString().trim()
@@ -100,10 +93,7 @@ class JoinActivity : AppCompatActivity() {
                 Toast.makeText(this, "올바른 이메일 주소를 입력하세요.", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
-
-            // 버튼 텍스트에 따라 동작 분기 처리
             when (verifyEmailButton.text.toString()) {
-                // "인증하기" 버튼 분기 내에서:
                 "인증하기" -> {
                     auth.fetchSignInMethodsForEmail(email)
                         .addOnCompleteListener { task ->
@@ -126,7 +116,6 @@ class JoinActivity : AppCompatActivity() {
                             }
                         }
                 }
-
                 "인증 확인" -> {
                     auth.currentUser?.reload()?.addOnCompleteListener { task ->
                         if (task.isSuccessful) {
@@ -147,10 +136,8 @@ class JoinActivity : AppCompatActivity() {
             }
         }
 
-
         // 회원가입 버튼 클릭 시 모든 필드 확인 후 Firestore에 등록
         registerButton.setOnClickListener {
-            // 여기서 id와 email는 동일한 값을 사용합니다.
             val email = emailInput.text.toString().trim()
             val password = passwordInput.text.toString().trim()
             val nickname = nicknameInput.text.toString().trim()
@@ -176,7 +163,7 @@ class JoinActivity : AppCompatActivity() {
                         return@addOnCompleteListener
                     }
                     // 인증 완료 상태에서 회원가입 진행
-                    registerUser(email, password, nickname, email)
+                    saveUserToFirestore(user.uid, email, password, nickname)
                 } else {
                     Toast.makeText(this, "이메일 인증 상태를 확인할 수 없습니다.", Toast.LENGTH_SHORT).show()
                 }
@@ -204,19 +191,11 @@ class JoinActivity : AppCompatActivity() {
             }
     }
 
-    // Firestore에 사용자 정보 저장
-    private fun registerUser(id: String, password: String, nickname: String, email: String) {
+    // Firestore에 사용자 정보 저장 (회원가입)
+    private fun saveUserToFirestore(uid: String, email: String, password: String, nickname: String) {
         val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
         val currentTime = dateFormat.format(System.currentTimeMillis())
-        val currentUser = auth.currentUser
-        val uid = currentUser?.uid ?: ""
 
-        if (uid.isEmpty()) {
-            Toast.makeText(this, "Firebase UID를 가져올 수 없습니다!", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        // users 컬렉션에 저장할 데이터
         val userMap = hashMapOf(
             "email" to email,
             "password" to password,
@@ -224,32 +203,24 @@ class JoinActivity : AppCompatActivity() {
             "createdAt" to currentTime
         )
 
-        // user_profiles 컬렉션에 저장할 데이터
         val userProfileMap = hashMapOf(
             "nickname" to nickname,
-            "myinfo" to "아직 자기소개가 없습니다.",   // 기본 자기소개
-            "theme" to "default",   // 기본 테마값 (필요에 따라 변경)
-            "profileImageUrl" to "gs://yumi-5f5c0.firebasestorage.app/default_profile.jpg" // 기본 프로필 이미지 URL
+            "myinfo" to "아직 자기소개가 없습니다.",
+            "theme" to "default",
+            "profileImageUrl" to "gs://yumi-5f5c0.firebasestorage.app/default_profile.jpg"
         )
 
-        // users 컬렉션에 저장 (문서 키로 id 사용)
-        db.collection("users").document(email)
+        db.collection("users").document(uid)
             .set(userMap)
             .addOnSuccessListener {
-                Toast.makeText(this, "회원가입 성공! (users 저장)", Toast.LENGTH_SHORT).show()
-                // user_profiles 컬렉션에 저장
-                db.collection("user_profiles").document(id)
+                db.collection("user_profiles").document(uid)
                     .set(userProfileMap)
                     .addOnSuccessListener {
-                        Toast.makeText(this, "user_profiles에도 저장 완료!", Toast.LENGTH_SHORT).show()
-                        finish()  // 회원가입 완료 후 액티비티 종료
+                        Toast.makeText(this, "회원가입 성공!", Toast.LENGTH_SHORT).show()
+                        finish()
                     }
                     .addOnFailureListener { e ->
-                        Toast.makeText(
-                            this,
-                            "user_profiles 저장 실패: ${e.message}",
-                            Toast.LENGTH_SHORT
-                        ).show()
+                        Toast.makeText(this, "user_profiles 저장 실패: ${e.message}", Toast.LENGTH_SHORT).show()
                     }
             }
             .addOnFailureListener { e ->
@@ -257,4 +228,3 @@ class JoinActivity : AppCompatActivity() {
             }
     }
 }
-

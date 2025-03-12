@@ -31,14 +31,23 @@
         android:layout_marginTop="20dp"
         android:layout_alignParentTop="true"/>
 
-    <!-- 채팅 목록 -->
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/chatRecyclerView"
+    <!-- 채팅 리스트 컨테이너 -->
+    <LinearLayout
+        android:id="@+id/chatContainer"
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_marginTop="72dp"
+        android:layout_height="match_parent"
+        android:layout_below="@id/chatTitle"
         android:layout_above="@id/messageContainer"
-        android:overScrollMode="never" />
+        android:orientation="vertical"
+        android:padding="8dp"> <!-- ✅ 배경 추가해서 보이는지 확인 -->
+
+        <!-- 채팅 목록 -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/chatRecyclerView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:overScrollMode="never" />
+    </LinearLayout>
 
     <!-- 메시지 입력 영역 -->
     <LinearLayout

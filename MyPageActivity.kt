@@ -1,31 +1,33 @@
 package com.example.yumi
 
 import android.content.Context
+import android.content.Intent
 import android.os.Bundle
 import android.util.Log
+import android.view.View
 import android.widget.Button
+import android.widget.ImageView
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.engine.DiskCacheStrategy
+import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
-import androidx.recyclerview.widget.GridLayoutManager
-import android.content.Intent
-import android.net.Uri
-import android.widget.ImageView
-import com.google.android.material.bottomnavigation.BottomNavigationView
-import kotlinx.coroutines.*
-import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.storage.FirebaseStorage
+import kotlinx.coroutines.*
 
 class MyPageActivity : AppCompatActivity(), ProfileEditDialog.ProfileUpdateListener {
 
     override fun onProfileUpdated(nickname: String, bio: String, imageUrl: String?) {
         refreshProfileUI(nickname, bio, imageUrl)
     }
+
+    private lateinit var emptyFriendsText: TextView
+    private lateinit var emptyFavoritesText: TextView
 
     private lateinit var auth: FirebaseAuth
     private lateinit var db: FirebaseFirestore
@@ -38,22 +40,14 @@ class MyPageActivity : AppCompatActivity(), ProfileEditDialog.ProfileUpdateListe
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_mypage)
 
-
-        val currentUser = FirebaseAuth.getInstance().currentUser
-        if (currentUser != null) {
-            Log.d("FirebaseAuth", "현재 사용자의 uid: ${currentUser.uid}")
-        } else {
-            Log.d("FirebaseAuth", "로그인된 사용자가 없습니다.")
-        }
-
+        emptyFriendsText = findViewById(R.id.emptyFriendsText)
+        emptyFavoritesText = findViewById(R.id.emptyFavoritesText)
 
         auth = FirebaseAuth.getInstance()
         db = FirebaseFirestore.getInstance()
 
         val settingsText = findViewById<TextView>(R.id.settingsText)
         val settingsIcon = findViewById<ImageView>(R.id.settingsIcon)
-
-
 
         settingsText.setOnClickListener {
             startActivity(Intent(this, SettingsActivity::class.java))
@@ -72,17 +66,10 @@ class MyPageActivity : AppCompatActivity(), ProfileEditDialog.ProfileUpdateListe
                     finish()
                     true
                 }
-
-                R.id.category2 -> {
+                R.id.category2, R.id.category3 -> {
                     finish()
                     true
                 }
-
-                R.id.category3 -> {
-                    finish()
-                    true
-                }
-
                 R.id.category4 -> true
                 else -> false
             }
@@ -95,82 +82,50 @@ class MyPageActivity : AppCompatActivity(), ProfileEditDialog.ProfileUpdateListe
         }
 
         friendsRecyclerView = findViewById(R.id.friendsList)
-        friendsRecyclerView.layoutManager =
-            LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
+        friendsRecyclerView.layoutManager = LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
 
         favoritesRecyclerView = findViewById(R.id.favoritesList)
-        favoritesRecyclerView.layoutManager = LinearLayoutManager(this)
-
-        val favoritesList = mutableListOf<HashMap<String, String>>()
-        favoritesAdapter = FavoritesAdapter(favoritesList, "")
+        favoritesRecyclerView.layoutManager = GridLayoutManager(this, 2)
+        favoritesAdapter = FavoritesAdapter(mutableListOf(), "")
         favoritesRecyclerView.adapter = favoritesAdapter
     }
-
-
-
 
     override fun onStart() {
         super.onStart()
 
         val sharedPref = getSharedPreferences("UserPrefs", Context.MODE_PRIVATE)
-        val userEmail = sharedPref.getString("loggedInUserId", null) ?: ""
+        val uid = sharedPref.getString("loggedInUID", null) ?: ""
 
-        if (userEmail.isEmpty()) {
-            Log.e("MyPageActivity", "❌ 로그인한 사용자 ID를 찾을 수 없음! 로그인 화면으로 이동")
+        if (uid.isEmpty()) {
             startActivity(Intent(this, LoginActivity::class.java))
             finish()
-        } else {
-            Log.d("MyPageActivity", "✅ 저장된 사용자 ID: $userEmail")
-            CoroutineScope(Dispatchers.IO).launch {
-                loadUserProfile(userEmail)
-                loadFriendsList(userEmail)
-                loadFavoritesList(userEmail)
-            }
+            return
+        }
+
+        CoroutineScope(Dispatchers.IO).launch {
+            loadUserProfile(uid)
+            loadFriendsList(uid)
+            loadFavoritesList(uid)
         }
     }
-
-    fun refreshProfileFromFirestore(userId: String) {
-        val usersRef = db.collection("users").document(userId)
-        val profilesRef = db.collection("user_profiles").document(userId)
-
-        usersRef.get()
-            .addOnSuccessListener { document ->
-                if (document.exists()) {
-                    val nickname = document.getString("nickname") ?: "알 수 없음"
-                    profilesRef.get()
-                        .addOnSuccessListener { profileDoc ->
-                            if (profileDoc.exists()) {
-                                val bio = profileDoc.getString("myinfo") ?: "자기소개 없음"
-                                val imageUrl = profileDoc.getString("profileImageUrl") ?: ""
-                                refreshProfileUI(nickname, bio, imageUrl)
-                            }
-                        }
-                        .addOnFailureListener { e ->
-                            Log.e("Firestore", "❌ 프로필 정보 가져오기 실패", e)
-                        }
-                }
-            }
-            .addOnFailureListener { e ->
-                Log.e("Firestore", "❌ 닉네임 가져오기 실패", e)
-            }
-    }
-
 
     private fun refreshProfileUI(nickname: String, bio: String, imageUrl: String?) {
-        findViewById<TextView>(R.id.userName).text = nickname
-        findViewById<TextView>(R.id.userBio).text = bio
-
-        val profileImageView = findViewById<ImageView>(R.id.profileImage)
-        if (!imageUrl.isNullOrEmpty()) {
-            if (imageUrl.startsWith("gs://")) {
-                convertGsUrlToHttp(imageUrl) { httpUrl ->
-                    loadImage(httpUrl ?: "", profileImageView)
+        runOnUiThread {
+            findViewById<TextView>(R.id.userName).text = nickname
+            findViewById<TextView>(R.id.userBio).text = bio
+            val profileImageView = findViewById<ImageView>(R.id.profileImage)
+            if (!imageUrl.isNullOrEmpty()) {
+                if (imageUrl.startsWith("gs://")) {
+                    convertGsUrlToHttp(imageUrl) { httpUrl ->
+                        loadImage(httpUrl ?: "", profileImageView)
+                    }
+                } else {
+                    loadImage(imageUrl, profileImageView)
                 }
-            } else {
-                loadImage(imageUrl, profileImageView)
             }
         }
     }
+
     private fun loadImage(url: String?, imageView: ImageView) {
         if (!url.isNullOrEmpty()) {
             Glide.with(this)
@@ -182,48 +137,20 @@ class MyPageActivity : AppCompatActivity(), ProfileEditDialog.ProfileUpdateListe
         }
     }
 
-    private fun loadUserProfile(userEmail: String) {
-
-        db.collection("user_profiles").document(userEmail)
-            .get()
-            .addOnSuccessListener { document ->
-
-            }
-
-        db.collection("user_profiles").document(userEmail)
-            .get()
+    private fun loadUserProfile(uid: String) {
+        db.collection("user_profiles").document(uid).get()
             .addOnSuccessListener { document ->
                 if (document.exists()) {
                     val bio = document.getString("myinfo") ?: "자기소개 없음"
                     val imageUrl = document.getString("profileImageUrl") ?: ""
                     val nickname = document.getString("nickname") ?: "알 수 없음"
-                    findViewById<TextView>(R.id.userName).text = nickname
-                    val profileImageView = findViewById<ImageView>(R.id.profileImage)
-
-                    // 🔥 Firebase Storage 기본 프로필 이미지 URL 직접 처리
-                    val defaultProfileUrl = "gs://yumi-5f5c0.firebasestorage.app/default_profile.jpg"
-
-                    if (!imageUrl.isNullOrEmpty()) {
-                        if (imageUrl.startsWith("gs://")) {
-                            convertGsUrlToHttp(imageUrl) { httpUrl ->
-                                loadImage(httpUrl ?: "", profileImageView)
-                            }
-                        } else {
-                            loadImage(imageUrl, profileImageView)
-                        }
-                    } else {
-                        convertGsUrlToHttp(defaultProfileUrl) { httpUrl ->
-                            loadImage(httpUrl ?: "", profileImageView)
-                        }
-                    }
-
                     refreshProfileUI(nickname, bio, imageUrl)
                 }
             }
     }
+
     private fun convertGsUrlToHttp(gsUrl: String, onComplete: (String?) -> Unit) {
-        FirebaseStorage.getInstance().getReferenceFromUrl(gsUrl)
-            .downloadUrl
+        FirebaseStorage.getInstance().getReferenceFromUrl(gsUrl).downloadUrl
             .addOnSuccessListener { downloadUri ->
                 onComplete(downloadUri.toString())
             }
@@ -233,32 +160,37 @@ class MyPageActivity : AppCompatActivity(), ProfileEditDialog.ProfileUpdateListe
             }
     }
 
-
-    private fun loadFriendsList(userId: String) {
-        db.collection("users").document(userId).collection("friends")
+    private fun loadFriendsList(uid: String) {
+        db.collection("users").document(uid).collection("friends")
             .get()
             .addOnSuccessListener { documents ->
                 val friendsList = mutableListOf<HashMap<String, String>>()
                 for (document in documents) {
-                    val friendName = document.getString("nickname") ?: "알 수 없음"
-                    val friendProfile = document.getString("profileImageUrl") ?: ""
-                    friendsList.add(
-                        hashMapOf(
-                            "nickname" to friendName,
-                            "profileImageUrl" to friendProfile
-                        )
-                    )
+                    val friendId = document.id
+                    val friendData = document.data.toMutableMap()
+                    friendData["id"] = friendId
+                    friendsList.add(friendData as HashMap<String, String>)
                 }
-                val friendsAdapter = FriendsAdapter(friendsList)
-                friendsRecyclerView.adapter = friendsAdapter
+
+                runOnUiThread {
+                    if (friendsList.isEmpty()) {
+                        emptyFriendsText.visibility = View.VISIBLE
+                        friendsRecyclerView.visibility = View.GONE
+                    } else {
+                        emptyFriendsText.visibility = View.GONE
+                        friendsRecyclerView.visibility = View.VISIBLE
+                        val friendsAdapter = FriendsAdapter(friendsList)
+                        friendsRecyclerView.adapter = friendsAdapter
+                    }
+                }
             }
             .addOnFailureListener { e ->
                 Log.e("Firestore", "❌ 친구 목록 가져오기 실패", e)
             }
     }
 
-    private fun loadFavoritesList(userId: String) {
-        db.collection("users").document(userId).collection("favorites")
+    private fun loadFavoritesList(uid: String) {
+        db.collection("users").document(uid).collection("favorites")
             .get()
             .addOnSuccessListener { documents ->
                 val favoritesList = mutableListOf<HashMap<String, String>>()
@@ -266,12 +198,20 @@ class MyPageActivity : AppCompatActivity(), ProfileEditDialog.ProfileUpdateListe
                     val summonerName = document.getString("summonerName") ?: "알 수 없음"
                     favoritesList.add(hashMapOf("summonerName" to summonerName))
                 }
-                favoritesRecyclerView.layoutManager = GridLayoutManager(this, 2)
-                favoritesAdapter.updateFavorites(favoritesList)
+                runOnUiThread {
+                    if (favoritesList.isEmpty()) {
+                        emptyFavoritesText.visibility = View.VISIBLE
+                        favoritesRecyclerView.visibility = View.GONE
+                    } else {
+                        emptyFavoritesText.visibility = View.GONE
+                        favoritesRecyclerView.visibility = View.VISIBLE
+                        favoritesAdapter.updateFavorites(favoritesList)
+                        favoritesRecyclerView.adapter = favoritesAdapter
+                    }
+                }
             }
             .addOnFailureListener { e ->
                 Log.e("Firestore", "❌ 즐겨찾기 목록 가져오기 실패", e)
             }
     }
-
 }

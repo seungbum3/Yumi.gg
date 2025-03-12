@@ -11,6 +11,7 @@ import android.content.Intent
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import android.util.Log
+import com.google.firebase.storage.FirebaseStorage
 
 class FriendsAdapter(private val friendsList: List<Map<String, String>>) :
     RecyclerView.Adapter<FriendsAdapter.ViewHolder>() {
@@ -33,33 +34,61 @@ class FriendsAdapter(private val friendsList: List<Map<String, String>>) :
 
         holder.friendName.text = name
 
-        Glide.with(holder.itemView.context)
-            .load(imageUrl)
-        //     .placeholder(R.drawable.default_profile)
-        //    .error(R.drawable.default_profile)
-            .circleCrop()
-            .into(holder.friendProfileImage)
+        // gs:// 형식이면 HTTP URL로 변환하여 로드
+        if (imageUrl.startsWith("gs://")) {
+            FirebaseStorage.getInstance().getReferenceFromUrl(imageUrl)
+                .downloadUrl
+                .addOnSuccessListener { uri ->
+                    Glide.with(holder.itemView.context)
+                        .load(uri.toString())
+                        .circleCrop()
+                        .into(holder.friendProfileImage)
+                }
+                .addOnFailureListener {
+                }
+        } else {
+            Glide.with(holder.itemView.context)
+                .load(imageUrl)
+                .circleCrop()
+                .into(holder.friendProfileImage)
+        }
 
-        // ✅ 친구 목록에서 클릭 시 채팅방 이동 (닉네임이 정확히 전달되도록 수정)
+        // 친구 목록에서 클릭 시 채팅방 이동
         holder.itemView.setOnClickListener {
             val context = holder.itemView.context
             val currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: return@setOnClickListener
+            val friendId = friend["id"]
+
+            // 로그 추가하여 id 값 확인
+            Log.d("FriendsAdapter", "✅ friend 데이터: $friend") // 전체 friend 객체 출력
+            Log.d("FriendsAdapter", "✅ friendId 값: $friendId") // id 값만 출력
+
+            if (friendId.isNullOrEmpty()) {
+                Log.e("FriendsAdapter", "❌ 친구 ID가 없음! 채팅을 시작할 수 없습니다.")
+                return@setOnClickListener
+            }
 
             getOrCreateChatRoom(currentUserId, friendId) { chatId ->
-                Log.d("FriendsAdapter", "🔹 친구 선택됨 - ID: $friendId, 닉네임: $name")  // ✅ 로그 추가
-
+                Log.d("FriendsAdapter", "✅ 친구 선택됨 - ID: $friendId, 닉네임: ${friend["nickname"]}")
                 val intent = Intent(context, ChatActivity::class.java).apply {
                     putExtra("chatId", chatId)
                     putExtra("friendId", friendId)
-                    putExtra("friendNickname", name)  // ✅ 닉네임 전달 확인
+                    putExtra("friendNickname", friend["nickname"])
                 }
                 context.startActivity(intent)
             }
         }
+
     }
+
     override fun getItemCount(): Int = friendsList.size
 
     private fun getOrCreateChatRoom(userA: String, userB: String, callback: (String) -> Unit) {
+        if (userB.isEmpty()) {
+            Log.e("ChatActivity", "❌ 채팅 상대 UID가 비어 있음!")
+            return
+        }
+
         val db = FirebaseFirestore.getInstance()
         val chatsRef = db.collection("chats")
 
@@ -69,21 +98,28 @@ class FriendsAdapter(private val friendsList: List<Map<String, String>>) :
                 for (document in documents) {
                     val users = document.get("users") as List<String>
                     if (users.contains(userB)) {
-                        // ✅ 기존 채팅방이 존재하면 해당 chatId 반환
+                        Log.d("ChatActivity", "✅ 기존 채팅방 찾음: ${document.id}")
                         callback(document.id)
                         return@addOnSuccessListener
                     }
                 }
-                // 채팅방이 없으면 새로 생성
+
+                // ✅ 새 채팅방 생성 (users 필드 포함)
                 val newChatRef = chatsRef.document()
                 val chatData = hashMapOf(
-                    "users" to listOf(userA, userB),
+                    "users" to listOf(userA, userB), // ✅ 채팅방 참여자 목록 포함
                     "lastMessage" to "",
                     "updatedAt" to com.google.firebase.Timestamp.now()
                 )
-                newChatRef.set(chatData).addOnSuccessListener {
-                    callback(newChatRef.id) // ✅ 새 chatId 반환
-                }
+                newChatRef.set(chatData)
+                    .addOnSuccessListener {
+                        Log.d("ChatActivity", "✅ 새 채팅방 생성: ${newChatRef.id}, users: [$userA, $userB]")
+                        callback(newChatRef.id)
+                    }
+                    .addOnFailureListener { e ->
+                        Log.e("ChatActivity", "❌ 채팅방 생성 실패", e)
+                    }
             }
     }
+
 }
