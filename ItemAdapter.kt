@@ -1,4 +1,4 @@
-package com.example.yumi.adapters
+package com.example.yumi2.adapter
 
 import android.util.Log
 import android.view.LayoutInflater
@@ -11,8 +11,8 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
-import com.example.yumi.R
-import com.example.yumi.models.Item
+import com.example.yumi2.R
+import com.example.yumi2.model.Item
 
 class ItemAdapter(
     private val originalItemList: List<Item>,
@@ -61,24 +61,41 @@ class ItemAdapter(
     override fun getFilter(): Filter {
         return object : Filter() {
             override fun performFiltering(constraint: CharSequence?): FilterResults {
-                val query = constraint?.toString()?.trim() ?: ""
-                val results = FilterResults()
-                results.values = if (query.isEmpty()) {
-                    originalItemList
-                } else {
-                    originalItemList.filter {
-                        it.name.contains(query, ignoreCase = true)
+                val query = constraint?.toString()?.lowercase()?.trim() ?: ""
+                val filtered = when {
+                    query.isEmpty() -> originalItemList
+                    query == "*" -> emptyList()
+                    else -> originalItemList.filter { item ->
+                        val name = item.name.lowercase()
+                        val rawDesc = item.description.lowercase()
+                        val description = if (rawDesc == "설명 없음") "" else rawDesc.replace("*", "")
+                        val effect = item.effect.lowercase()
+                        val stats = item.stats.lowercase()
+
+                        name.contains(query) ||
+                                description.contains(query) ||
+                                effect.contains(query) ||
+                                stats.contains(query)
                     }
                 }
-                return results
+                return FilterResults().apply { values = filtered }
             }
 
+
+            @Suppress("UNCHECKED_CAST")
             override fun publishResults(constraint: CharSequence?, results: FilterResults?) {
                 filteredItemList = results?.values as List<Item>
                 notifyDataSetChanged()
             }
         }
     }
+
+
+    fun getItemList(): List<Item> {
+        return originalItemList
+    }
+
+
     fun filterByMultipleCategories(categories: Set<String>) {
         Log.d("FILTER", "필터링 시작 - 적용된 필터: $categories")
 

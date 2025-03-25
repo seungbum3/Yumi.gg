@@ -1,39 +1,56 @@
-package com.example.yumi
+package com.example.yumi2
 
 import android.app.AlertDialog
-import android.graphics.Color
-import android.graphics.drawable.ColorDrawable
 import android.os.Bundle
 import android.util.Log
 import android.view.LayoutInflater
-import android.view.View
-import android.view.ViewGroup
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.example.yumi.adapters.ItemAdapter
-import com.example.yumi.models.Item
+import com.bumptech.glide.Glide
+import com.example.yumi2.adapter.ItemAdapter
+import com.example.yumi2.model.Item
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
-import android.text.Spannable
-import android.text.SpannableString
-import android.text.style.ForegroundColorSpan
 
 class ItemSelectionActivity : AppCompatActivity() {
 
     private lateinit var itemRecyclerView: RecyclerView
-    private lateinit var itemAdapter: ItemAdapter
     private lateinit var slotRecyclerView: RecyclerView
+    private lateinit var toggleQuickSlot: ToggleButton
+    private lateinit var itemAdapter: ItemAdapter
     private val selectedFilters = mutableSetOf<String>()
 
     lateinit var firestore: FirebaseFirestore
+    private var isQuickSlotMode = false  // 퀵 슬롯 모드 여부
+
+    private val statIconMap = mapOf(
+        "공격력" to R.drawable.lol_stat_attack,
+        "주문력" to R.drawable.lol_stat_magic ,
+        "방어력" to R.drawable.lol_stat_armor,
+        "마법 저항력" to R.drawable.lol_stat_magic_r,
+        "공격 속도" to R.drawable.lol_stat_attack_speed,
+        "이동 속도" to R.drawable.lol_filter_movement_speed,
+        "기본 마나 재생" to R.drawable.lol_stat_manaregen,
+        "기본 체력 재생" to R.drawable.lol_stat_hpregen,
+        "체력" to R.drawable.lol_stat_hp,
+        "마나" to R.drawable.lol_stat_mana,
+        "치명타 확률" to R.drawable.lol_stat_crit_chance,
+        "생명력 흡수" to R.drawable.lol_stat_life_steal,
+        "스킬 가속" to R.drawable.lol_stat_skill_time,
+        "방어구 관통력" to R.drawable.lol_stat_armor_p,
+        "물리 관통력" to R.drawable.lol_stat_armor_p,
+        "마법 관통력" to R.drawable.lol_stat_magic_p,
+        "강인함" to R.drawable.lol_stat_tenacity,
+        "초당 골드" to R.drawable.lol_stat_coin,
+        "체력 회복 및 보호막" to R.drawable.lol_stat_has
+    )
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_item_selection)
 
-        // 현재 로그인한 사용자 UID 출력 예시
         val uid = FirebaseAuth.getInstance().currentUser?.uid
         if (uid.isNullOrEmpty()) {
             Toast.makeText(this, "로그인 정보가 없습니다!", Toast.LENGTH_SHORT).show()
@@ -42,12 +59,19 @@ class ItemSelectionActivity : AppCompatActivity() {
         }
 
         Log.d("UserUID", "현재 로그인한 사용자의 UID: $uid")
+
         itemRecyclerView = findViewById(R.id.itemRecyclerView)
         slotRecyclerView = findViewById(R.id.slotRecyclerView)
+        toggleQuickSlot = findViewById(R.id.toggleQuickSlot)
         firestore = FirebaseFirestore.getInstance()
 
         val btnBack: ImageView = findViewById(R.id.btnBack)
         btnBack.setOnClickListener { finish() }
+
+        // 퀵 슬롯 모드 토글
+        toggleQuickSlot.setOnCheckedChangeListener { _, isChecked ->
+            isQuickSlotMode = isChecked
+        }
 
         // 상단 6칸 슬롯 RecyclerView 설정
         setupSlotRecyclerView()
@@ -56,95 +80,190 @@ class ItemSelectionActivity : AppCompatActivity() {
         itemRecyclerView.layoutManager = GridLayoutManager(this, 5)
         fetchItemsFromFirestore()
 
+        // 필터 및 검색 기능 유지
+        setupSearchAndFilters()
+
+        // 저장/불러오기 버튼 설정
+        setupSaveAndLoadButtons(uid)
+    }
+
+
+
+    private fun setupSearchAndFilters() {
         val searchView = findViewById<SearchView>(R.id.searchView)
         searchView.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
-            override fun onQueryTextSubmit(query: String?): Boolean {
-                return false
-            }
+            override fun onQueryTextSubmit(query: String?): Boolean = false
             override fun onQueryTextChange(newText: String?): Boolean {
                 itemAdapter.filter.filter(newText ?: "")
                 return true
             }
         })
 
-        // 저장, 불러오기 버튼 참조
-        val btnSaveSlots = findViewById<Button>(R.id.btnSaveSlots)
-        val btnLoadSlots = findViewById<Button>(R.id.btnLoadSlots)
-
-
-        btnSaveSlots.setOnClickListener { saveConfiguration(uid) }
-        btnLoadSlots.setOnClickListener { showLoadConfigurationsDialog(uid) }
-
-        fetchItemsFromFirestore()
-
-
-        val filterAttack = findViewById<ImageButton>(R.id.filter_attack)
-        val filterCritical = findViewById<ImageButton>(R.id.filter_Critical)
-        val filterAttack_speed = findViewById<ImageButton>(R.id.filter_attack_speed)
-        val filterOnhit = findViewById<ImageButton>(R.id.filter_Onhit)
-        val filterArmor_p = findViewById<ImageButton>(R.id.filter_Armor_p)
-        val filterAvility = findViewById<ImageButton>(R.id.filter_Avility)
-        val filterMana = findViewById<ImageButton>(R.id.filter_Mana)
-        val filterMagic_p = findViewById<ImageButton>(R.id.filter_Magic_p)
-        val filterHealth = findViewById<ImageButton>(R.id.filter_Health)
-        val filterArmor = findViewById<ImageButton>(R.id.filter_Armor)
-        val filterMagic_r = findViewById<ImageButton>(R.id.filter_Magic_r)
-        val filterCooldown = findViewById<ImageButton>(R.id.filter_cooldown)
-        val filterMovement = findViewById<ImageButton>(R.id.filter_Movement)
-        val filterOmnivamp = findViewById<ImageButton>(R.id.filter_Omnivamp)
-
-
-        setupFilterButtons(
-            filterAttack to "공격력",
-            filterCritical to "치명타 확률",
-            filterAttack_speed to "공격 속도",
-            filterOnhit to "적중 시 효과",
-            filterArmor_p to "물리 관통력",
-            filterAvility to "주문력",
-            filterMana to "마나 및 재생",
-            filterMagic_p to "마법 관통력",
-            filterHealth to "체력 및 재생",
-            filterArmor to "방어력",
-            filterMagic_r to "마법 저항력",
-            filterCooldown to "스킬 가속",
-            filterMovement to "이동 속도",
-            filterOmnivamp to "생명력 흡수 및 흡혈"
+        val filters = listOf(
+            R.id.filter_attack to "공격력",
+            R.id.filter_Critical to "치명타 확률",
+            R.id.filter_attack_speed to "공격 속도",
+            R.id.filter_Onhit to "적중 시 효과",
+            R.id.filter_Armor_p to "물리 관통력",
+            R.id.filter_Avility to "주문력",
+            R.id.filter_Mana to "마나 및 재생",
+            R.id.filter_Magic_p to "마법 관통력",
+            R.id.filter_Health to "체력 및 재생",
+            R.id.filter_Armor to "방어력",
+            R.id.filter_Magic_r to "마법 저항력",
+            R.id.filter_cooldown to "스킬 가속",
+            R.id.filter_Movement to "이동 속도",
+            R.id.filter_Omnivamp to "생명력 흡수 및 흡혈"
         )
 
-    }
-
-
-    private fun setupFilterButtons(vararg filters: Pair<ImageButton, String>) {
-        for ((button, category) in filters) {
+        filters.forEach { (id, category) ->
+            val button = findViewById<ImageButton>(id)
             button.setOnClickListener {
                 if (selectedFilters.contains(category)) {
                     selectedFilters.remove(category)
-                    button.setBackgroundResource(R.drawable.filter_default) // 선택 해제
+                    button.setBackgroundResource(R.drawable.filter_default)
                 } else {
                     selectedFilters.add(category)
-                    button.setBackgroundResource(R.drawable.filter_selected) // 선택됨
+                    button.setBackgroundResource(R.drawable.filter_selected)
                 }
-                applyFilters() // 🔥 필터 적용
+                applyFilters()
             }
         }
     }
 
     private fun applyFilters() {
-        Log.d("FILTER", "현재 선택된 필터: $selectedFilters")
-
         if (selectedFilters.isEmpty()) {
-            itemAdapter.resetFilters() // 모든 필터 해제 시 전체 목록 표시
+            itemAdapter.resetFilters()
         } else {
             itemAdapter.filterByMultipleCategories(selectedFilters)
         }
     }
-    // 저장된 구성 데이터 클래스 (6칸 슬롯)
-    data class SavedConfiguration(
-        val configName: String = "",  // 구성 이름(문서 ID로 활용)
-        val slots: List<Item?> = List(6) { null }  // 6칸 슬롯 데이터
-    )
 
-    // 저장 기능: 최소 1개 이상의 아이템이 선택되어야 저장
+    private fun fetchItemsFromFirestore() {
+        firestore.collection("items")
+            .whereEqualTo("isActive", true)
+            .get()
+            .addOnSuccessListener { documents ->
+                val itemList = mutableListOf<Item>()
+                for (document in documents) {
+                    val id = document.getString("id") ?: ""
+                    val name = document.getString("name") ?: "알 수 없음"
+                    val imageUrl = document.getString("imageUrl") ?: ""
+                    val tags = document.get("tags") as? List<String> ?: emptyList()
+                    val cost = document.getLong("cost")?.toInt() ?: 0
+                    val stats = document.get("stats")?.toString() ?: "능력치 정보 없음"
+                    val effect = document.getString("plaintext") ?: "효과 정보 없음"
+                    val description = document.getString("description") ?: "설명 없음"
+
+                    itemList.add(Item(id, name, imageUrl, tags, cost, stats, effect, description))
+                }
+                itemList.sortBy { it.cost }
+
+                itemAdapter = ItemAdapter(itemList) { item ->
+                    onItemClicked(item)
+                }
+                itemRecyclerView.adapter = itemAdapter
+            }
+            .addOnFailureListener { e ->
+                Log.e("Firestore", "아이템 가져오기 실패", e)
+            }
+    }
+
+    private fun onItemClicked(item: Item) {
+        if (isQuickSlotMode) {
+            addItemToSlot(item)
+        } else {
+            showItemDetailDialog(item)
+        }
+    }
+
+    private fun parseStats(statsString: String): List<Pair<String, String>> {
+        val cleanedString = statsString.trim().removePrefix("{").removeSuffix("}")
+        return cleanedString.split(",").mapNotNull {
+            val parts = it.split("=")
+            if (parts.size == 2) Pair(parts[0].trim(), parts[1].trim()) else null
+        }
+    }
+
+
+
+    private fun showItemDetailDialog(item: Item) {
+        val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_item_detail, null)
+        val dialog = AlertDialog.Builder(this)
+            .setView(dialogView)
+            .create()
+
+        // 기존 UI 요소
+        val itemName = dialogView.findViewById<TextView>(R.id.dialogItemName)
+        val itemImage = dialogView.findViewById<ImageView>(R.id.dialogItemImage)
+        val itemCost = dialogView.findViewById<TextView>(R.id.dialogItemCost)
+        // 능력치는 TextView 대신 statsContainer 컨테이너를 사용
+        val statsContainer = dialogView.findViewById<LinearLayout>(R.id.statsContainer)
+        val itemEffect = dialogView.findViewById<TextView>(R.id.dialogItemEffect)
+        val itemDescription = dialogView.findViewById<TextView>(R.id.dialogItemDescription)
+        val btnAddToSlot = dialogView.findViewById<Button>(R.id.btnAddToSlot)
+        val btnCancel = dialogView.findViewById<Button>(R.id.btnCancel)
+
+        itemName.text = item.name
+        itemCost.text = "가격: ${item.cost} 골드"
+        itemEffect.text = "효과: ${item.effect}"
+        itemDescription.text = "설명: ${item.description}"
+
+        Glide.with(this)
+            .load(item.imageUrl)
+            .placeholder(R.drawable.placeholder_image)
+            .error(R.drawable.error_image)
+            .into(itemImage)
+
+        // stats 문자열을 파싱해서 statsContainer에 동적으로 추가
+        statsContainer.removeAllViews()  // 기존 뷰 초기화
+        val statList = parseStats(item.stats)
+        for ((key, value) in statList) {
+            // 여기서 각 능력치 키와 값을 로그로 출력합니다.
+            Log.d("ItemStats", "능력치 키: $key, 값: $value")
+
+            // item_stat.xml 레이아웃을 동적으로 인플레이트
+            val statItemView =
+                LayoutInflater.from(this).inflate(R.layout.item_stat, statsContainer, false)
+            val statIcon = statItemView.findViewById<ImageView>(R.id.statIcon)
+            val statValue = statItemView.findViewById<TextView>(R.id.statValue)
+
+            // statIconMap에서 아이콘을 찾아 설정 (없으면 기본 아이콘 사용)
+            val iconResId = statIconMap[key] ?: R.drawable.yumi_icon
+            statIcon.setImageResource(iconResId)
+            statValue.text = value
+
+            statsContainer.addView(statItemView)
+        }
+
+        btnAddToSlot.setOnClickListener {
+            addItemToSlot(item)
+            dialog.dismiss()
+        }
+        btnCancel.setOnClickListener {
+            dialog.dismiss()
+        }
+        dialog.show()
+    }
+
+    private fun addItemToSlot(item: Item) {
+        val adapter = slotRecyclerView.adapter as? SlotAdapter
+        adapter?.addItemToSlot(item)
+    }
+
+    private fun setupSlotRecyclerView() {
+        slotRecyclerView.layoutManager = GridLayoutManager(this, 6)
+        slotRecyclerView.adapter = SlotAdapter()
+    }
+
+    private fun setupSaveAndLoadButtons(uid: String) {
+        val btnSaveSlots = findViewById<Button>(R.id.btnSaveSlots)
+        val btnLoadSlots = findViewById<Button>(R.id.btnLoadSlots)
+
+        btnSaveSlots.setOnClickListener { saveConfiguration(uid) }
+        btnLoadSlots.setOnClickListener { showLoadConfigurationsDialog(uid) }
+    }
+
     private fun saveConfiguration(uid: String) {
         val adapter = slotRecyclerView.adapter as? SlotAdapter ?: return
         val currentSlots = adapter.getSlotItems()
@@ -194,56 +313,6 @@ class ItemSelectionActivity : AppCompatActivity() {
         dialog.show()
     }
 
-    inner class SavedBuildAdapter(
-        private val context: ItemSelectionActivity,
-        private val configList: MutableList<SavedConfiguration>
-    ) : BaseAdapter() {
-        override fun getCount(): Int = configList.size
-        override fun getItem(position: Int): Any = configList[position]
-        override fun getItemId(position: Int): Long = position.toLong()
-        override fun getView(position: Int, convertView: View?, parent: ViewGroup?): View {
-            val view: View = convertView ?: LayoutInflater.from(context)
-                .inflate(R.layout.item_saved_build, parent, false)
-            val tvBuildName = view.findViewById<TextView>(R.id.tvBuildName)
-            val ivDelete = view.findViewById<ImageView>(R.id.ivDelete)
-
-            val config = configList[position]
-            tvBuildName.text = config.configName
-
-            // 리스트 아이템 클릭 시 구성 불러오기
-            view.setOnClickListener {
-                val adapter = slotRecyclerView.adapter as? SlotAdapter
-                adapter?.setSlots(config.slots)
-                Toast.makeText(context, "구성 불러오기 성공", Toast.LENGTH_SHORT).show()
-                // 다이얼로그 닫기
-                (parent as? ListView)?.let { listView ->
-                    (listView.parent as? AlertDialog)?.dismiss()
-                }
-            }
-
-            // 삭제 버튼 클릭 시 해당 구성 삭제
-            ivDelete.setOnClickListener {
-                val userId = context.getUserId()
-                if (userId.isNotEmpty()) {
-                    firestore.collection("users")
-                        .document(userId)
-                        .collection("savedConfigurations")
-                        .document(config.configName)
-                        .delete()
-                        .addOnSuccessListener {
-                            Toast.makeText(context, "구성 삭제 성공", Toast.LENGTH_SHORT).show()
-                            configList.removeAt(position)
-                            notifyDataSetChanged()
-                        }
-                        .addOnFailureListener { e ->
-                            Toast.makeText(context, "구성 삭제 실패: ${e.message}", Toast.LENGTH_SHORT).show()
-                        }
-                }
-            }
-            return view
-        }
-    }
-
     private fun showLoadConfigurationsDialog(uid: String) {
         val configCollection = firestore.collection("users")
             .document(uid)
@@ -263,7 +332,10 @@ class ItemSelectionActivity : AppCompatActivity() {
                 }
 
                 val listView = ListView(this)
-                val adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, configList.map { it.first })
+                val adapter = ArrayAdapter(
+                    this,
+                    android.R.layout.simple_list_item_1,
+                    configList.map { it.first })
                 listView.adapter = adapter
 
                 val dialog = AlertDialog.Builder(this)
@@ -275,7 +347,18 @@ class ItemSelectionActivity : AppCompatActivity() {
                 listView.setOnItemClickListener { _, _, position, _ ->
                     val selectedConfig = configList[position]
                     val slotAdapter = slotRecyclerView.adapter as? SlotAdapter
-                    slotAdapter?.setSlots(selectedConfig.second?.map { id -> Item(id ?: "", "", "", emptyList(), 0) } ?: emptyList())
+
+                    val fullItems = itemAdapter.getItemList()
+
+                    // 불러올 슬롯 개수(최대 6개)에 맞춰서 비어있는 칸도 포함하여 리스트 구성
+                    val loadedSlots = selectedConfig.second?.map { id ->
+                        fullItems.find { it.id == id }
+                    } ?: emptyList()
+
+                    // 기존 슬롯 초기화 후 다시 아이템 설정
+                    slotAdapter?.clearSlots()  // 슬롯 초기화 필수
+                    slotAdapter?.setSlots(loadedSlots)
+
                     Toast.makeText(this, "구성 불러오기 성공", Toast.LENGTH_SHORT).show()
                     dialog.dismiss()
                 }
@@ -288,122 +371,4 @@ class ItemSelectionActivity : AppCompatActivity() {
             }
     }
 
-
-    private fun setupSlotRecyclerView() {
-        slotRecyclerView.layoutManager = GridLayoutManager(this, 6)
-        slotRecyclerView.adapter = SlotAdapter()
-    }
-
-    private fun fetchItemsFromFirestore() {
-        firestore.collection("items")
-            .whereEqualTo("isActive", true)
-            .get()
-            .addOnSuccessListener { documents ->
-                val itemList = mutableListOf<Item>()
-                for (document in documents) {
-                    val id = document.getString("id") ?: ""
-                    val name = document.getString("name") ?: "알 수 없음"
-                    val imageUrl = document.getString("imageUrl") ?: ""
-                    val tags = document.get("tags") as? List<String> ?: emptyList()
-                    val cost = document.getLong("cost")?.toInt() ?: 0
-
-                    itemList.add(Item(id, name, imageUrl, tags, cost))
-                }
-                itemList.sortBy { it.cost }
-
-                itemAdapter = ItemAdapter(itemList) { item ->
-                    addItemToSlot(item)
-                }
-                itemRecyclerView.adapter = itemAdapter
-            }
-            .addOnFailureListener { e ->
-                Log.e("Firestore", "아이템 가져오기 실패", e)
-            }
-    }
-
-
-
-
-
-    private fun addItemToSlot(item: Item) {
-        val adapter = slotRecyclerView.adapter as? SlotAdapter
-        adapter?.addItemToSlot(item)
-    }
-
-    // 저장 기능: 현재 슬롯에 들어있는 아이템들을 Firestore의 "savedItems" 하위 컬렉션에 저장
-    private fun saveSlots() {
-        val adapter = slotRecyclerView.adapter as? SlotAdapter ?: return
-        val slots = adapter.getSlotItems() // SlotAdapter에서 추가할 메소드
-        val userId = getUserId()  // 로그인한 유저 ID 가져오기
-        if (userId.isEmpty()) {
-            Log.e("SaveSlots", "저장할 유저 ID가 없습니다.")
-            return
-        }
-        val savedItemsCollection = firestore.collection("users")
-            .document(userId)
-            .collection("savedConfigurations")
-
-        // 각 슬롯 인덱스에 대해 저장 (빈 슬롯은 삭제)
-        for (index in slots.indices) {
-            val slotItem = slots[index]
-            val docId = "slot$index"
-            if (slotItem != null) {
-                val data = hashMapOf(
-                    "id" to slotItem.id,
-                    "name" to slotItem.name,
-                    "imageUrl" to slotItem.imageUrl,
-                    "slotIndex" to index
-                )
-                savedItemsCollection.document(docId).set(data)
-                    .addOnSuccessListener {
-                        Log.d("SaveSlots", "Slot $index 저장 성공")
-                    }
-                    .addOnFailureListener { e ->
-                        Log.e("SaveSlots", "Slot $index 저장 실패", e)
-                    }
-            } else {
-                savedItemsCollection.document(docId).delete()
-                    .addOnSuccessListener {
-                        Log.d("SaveSlots", "Slot $index 삭제 성공")
-                    }
-                    .addOnFailureListener { e ->
-                        Log.e("SaveSlots", "Slot $index 삭제 실패", e)
-                    }
-            }
-        }
-    }
-
-    // 불러오기 기능: Firestore에서 "savedItems" 데이터를 불러와 슬롯 상태 업데이트
-    private fun loadSlots() {
-        val userId = getUserId()
-        if (userId.isEmpty()) {
-            Log.e("LoadSlots", "불러올 유저 ID가 없습니다.")
-            return
-        }
-        val savedItemsCollection = firestore.collection("users")
-            .document(userId)
-            .collection("savedConfigurations")
-        savedItemsCollection.get()
-            .addOnSuccessListener { querySnapshot ->
-                val loadedSlots = MutableList<Item?>(6) { null }
-                for (document in querySnapshot.documents) {
-                    val slotIndex = document.getLong("slotIndex")?.toInt() ?: continue
-                    if (slotIndex in 0..5) {
-                        val item = document.toObject(Item::class.java)
-                        loadedSlots[slotIndex] = item
-                    }
-                }
-                val adapter = slotRecyclerView.adapter as? SlotAdapter
-                adapter?.setSlots(loadedSlots)
-            }
-            .addOnFailureListener { e ->
-                Log.e("LoadSlots", "저장된 슬롯 불러오기 실패", e)
-            }
-    }
-
-    // SharedPreferences에서 로그인한 유저 ID를 가져오는 함수
-    private fun getUserId(): String {
-        val sharedPref = getSharedPreferences("UserPrefs", MODE_PRIVATE)
-        return sharedPref.getString("loggedInUserId", "") ?: ""
-    }
 }
