@@ -80,7 +80,7 @@ class PostDetailFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        // 기존 게시글 로드, 조회수 증가 등 코드
+        // 게시글 로드 및 조회수 증가
         if (postId.isNotEmpty()) {
             val postRef = firestore.collection("posts").document(postId)
             postRef.update("views", FieldValue.increment(1))
@@ -99,17 +99,15 @@ class PostDetailFragment : Fragment() {
             Toast.makeText(context, "Invalid post ID", Toast.LENGTH_SHORT).show()
         }
 
-        // ----- 여기서부터 추가된 뒤로가기 버튼 관련 코드 -----
+        // 뒤로가기 버튼 처리
         val backButton: ImageView = view.findViewById(R.id.backButton)
         backButton.setOnClickListener {
-            // FragmentBackStack에서 pop하거나, Activity의 onBackPressed() 호출하여 게시판 화면으로 복귀
             requireActivity().onBackPressed()
         }
-        // -----------------------------------------------------
 
-        // [댓글] 텍스트뷰와 댓글 영역 토글 처리 코드
+        // [댓글] 텍스트뷰와 댓글 영역 토글 처리
         val toggleCommentText: TextView = view.findViewById(R.id.toggleCommentText)
-        val commentInputLayout: View = view.findViewById(R.id.commentInputLayout)
+        val commentInputLayout: View = view.findViewById(R.id.commentInputContainer)
         val commentRecyclerView: View = view.findViewById(R.id.commentRecyclerView)
 
         // 초기 상태: 댓글 입력 영역과 댓글 목록 숨김
@@ -128,7 +126,6 @@ class PostDetailFragment : Fragment() {
             }
         }
     }
-
 
     private fun loadPostDetails(postId: String) {
         val postRef = firestore.collection("posts").document(postId)
@@ -200,6 +197,7 @@ class PostDetailFragment : Fragment() {
             }
     }
 
+    // loadComments 함수 수정: 댓글을 불러온 후 toggleCommentText에 댓글 개수를 업데이트합니다.
     private fun loadComments(postId: String) {
         firestore.collection("posts")
             .document(postId)
@@ -216,6 +214,9 @@ class PostDetailFragment : Fragment() {
                     comments.add(Comment(commentText, timestamp, uid, nickname))
                 }
                 commentAdapter.notifyDataSetChanged()
+                // 댓글 수에 따라 [댓글] 텍스트뷰 업데이트
+                val toggleCommentText: TextView? = view?.findViewById(R.id.toggleCommentText)
+                toggleCommentText?.text = "댓글[${comments.size}]"
             }
             .addOnFailureListener { exception ->
                 Toast.makeText(context, "댓글 불러오기 실패: ${exception.message}", Toast.LENGTH_SHORT).show()
