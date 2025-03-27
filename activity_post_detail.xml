@@ -6,7 +6,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="#FFFFFF"
-    tools:context=".PostDetailFragment">
+    tools:context=".comment.PostDetailFragment">
 
     <!-- ScrollView: 스크롤 영역 (게시글 상세 내용, 댓글 목록 등) -->
     <ScrollView
@@ -222,11 +222,14 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:hint="댓글을 입력하세요"
+            android:imeOptions="actionSend"
+            android:inputType="text"
             android:padding="8dp"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toStartOf="@id/commentSendButton"
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintBottom_toBottomOf="parent" />
+
 
         <Button
             android:id="@+id/commentSendButton"

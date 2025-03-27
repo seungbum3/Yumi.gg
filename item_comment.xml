@@ -49,5 +49,41 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="0.0"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/commentTimestamp" />
+        app:layout_constraintTop_toBottomOf="@+id/text_reply" />
+
+    <!-- item_comment.xml 내에 추가 -->
+    <TextView
+        android:id="@+id/text_reply"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="답글달기"
+        android:textColor="#007AFF"
+        android:textSize="14sp"
+        app:layout_constraintTop_toBottomOf="@id/commentTimestamp"
+        app:layout_constraintStart_toStartOf="parent"
+        android:layout_marginTop="4dp"/>
+
+    <!-- 작성된 답글을 표시할 TextView (초기에는 숨김 처리) -->
+    <TextView
+        android:id="@+id/text_reply_content"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:text=""
+        android:visibility="gone"
+        android:textSize="14sp"
+        android:textColor="#555555"
+        app:layout_constraintTop_toBottomOf="@id/text_reply"
+        app:layout_constraintStart_toStartOf="parent"
+        android:layout_marginTop="4dp"/>
+
+    <View
+        android:id="@+id/divider2"
+        android:layout_width="395dp"
+        android:layout_height="1dp"
+        android:background="@android:color/darker_gray"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.0"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/text_reply_content" />
+
 </androidx.constraintlayout.widget.ConstraintLayout>

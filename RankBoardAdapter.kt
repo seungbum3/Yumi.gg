@@ -1,7 +1,6 @@
-package com.example.opggyumi
+package com.example.opggyumi.comment
 
 import android.content.Context
-import android.content.Intent
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -11,6 +10,8 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.RecyclerView
 import coil.load
+import com.example.opggyumi.R
+import com.google.firebase.firestore.FirebaseFirestore
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -40,7 +41,6 @@ class RankBoardAdapter(private val context: Context, private val posts: List<Pos
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
         holder.timestampTextView.text = dateFormat.format(Date(post.timestamp))
 
-        // 이미지 URL이 있으면 Coil로 이미지 로딩
         if (!post.imageUrl.isNullOrEmpty()) {
             holder.postImageView.visibility = View.VISIBLE
             holder.postImageView.load(post.imageUrl)
@@ -48,12 +48,27 @@ class RankBoardAdapter(private val context: Context, private val posts: List<Pos
             holder.postImageView.visibility = View.GONE
         }
 
-        // 작성자 닉네임 설정
         holder.nicknameTextView.text = post.nickname ?: "알 수 없음"
 
-        // **여기서 2번 작업 시작**
-        // 게시글 클릭 시 PostDetailFragment를 생성하고, postId를 Bundle로 전달 후
-        // MainActivity의 fragment_container에 프래그먼트를 replace합니다.
+        // 댓글 수를 표시할 TextView 가져오기
+        val commentCountTextView = holder.itemView.findViewById<TextView>(R.id.text_comment_count)
+
+        // Firestore의 댓글 컬렉션을 실시간으로 구독하여 댓글 수 업데이트
+        FirebaseFirestore.getInstance().collection("posts")
+            .document(post.postId)
+            .collection("comments")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    commentCountTextView.text = "댓글[0]"
+                    return@addSnapshotListener
+                }
+                if (snapshot != null) {
+                    val commentCount = snapshot.size()
+                    commentCountTextView.text = "댓글[$commentCount]"
+                }
+            }
+
+        // 기존 게시글 클릭 시 상세 페이지 이동 코드
         holder.itemView.setOnClickListener {
             val fragment = PostDetailFragment().apply {
                 arguments = Bundle().apply {
@@ -65,8 +80,8 @@ class RankBoardAdapter(private val context: Context, private val posts: List<Pos
                 .addToBackStack(null)
                 .commit()
         }
-        // **여기서 2번 작업 끝**
     }
+
 
     override fun getItemCount(): Int = posts.size
 
