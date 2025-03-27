@@ -8,6 +8,7 @@ import android.provider.MediaStore
 import android.widget.Button
 import android.widget.EditText
 import android.widget.ImageView
+import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.google.firebase.auth.FirebaseAuth
@@ -21,6 +22,10 @@ class WritingActivity : AppCompatActivity() {
     private lateinit var currentCategory: String
     private lateinit var selectedImageView: ImageView
 
+    // 해시태그 관련 변수
+    private lateinit var hashtagTextView: TextView
+    private var hashtagList = arrayListOf<String>()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_writing)
@@ -31,25 +36,30 @@ class WritingActivity : AppCompatActivity() {
         val contentEditText = findViewById<EditText>(R.id.editTextContent)
         val saveButton = findViewById<Button>(R.id.button)
         selectedImageView = findViewById(R.id.imageView)
+        hashtagTextView = findViewById(R.id.hashtagTextView)
 
-        // 이미지 선택 이벤트 추가
+        // 이미지 선택
         selectedImageView.setOnClickListener {
             val intent = Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI)
             startActivityForResult(intent, PICK_IMAGE_REQUEST)
         }
 
-        // 게시글 저장 버튼 클릭 이벤트 추가
+        // 해시태그 텍스트뷰 클릭 시 HashtagActivity로 이동
+        hashtagTextView.setOnClickListener {
+            val intent = Intent(this, HashtagActivity::class.java)
+            startActivityForResult(intent, 200)  // 200은 해시태그 요청 코드
+        }
+
+        // 저장 버튼 클릭 시 해시태그 목록도 함께 Firestore에 저장
         saveButton.setOnClickListener {
             val title = titleEditText.text.toString()
             val content = contentEditText.text.toString()
 
             if (imageUri != null) {
-                // 이미지가 있으면 Firebase Storage에 업로드 후 Firestore에 저장
                 uploadImageToFirebase(imageUri!!) { imageUrl ->
                     savePostToFirestore(title, content, imageUrl)
                 }
             } else {
-                // 이미지가 없으면 그냥 Firestore에 저장
                 savePostToFirestore(title, content, null)
             }
         }
@@ -61,16 +71,19 @@ class WritingActivity : AppCompatActivity() {
         }
     }
 
-    // 이미지 선택 후 처리하는 함수
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == PICK_IMAGE_REQUEST && resultCode == Activity.RESULT_OK) {
             imageUri = data?.data
             selectedImageView.setImageURI(imageUri)
+        } else if (requestCode == 200 && resultCode == Activity.RESULT_OK) {
+            // 해시태그 액티비티에서 반환된 해시태그 목록 받기
+            hashtagList = data?.getStringArrayListExtra("hashtags") ?: arrayListOf()
+            // 해시태그들을 쉼표로 구분하여 표시
+            hashtagTextView.text = hashtagList.joinToString(", ")
         }
     }
 
-    // 이미지를 Firebase Storage에 업로드하는 함수
     private fun uploadImageToFirebase(uri: Uri, callback: (String) -> Unit) {
         val storageRef = FirebaseStorage.getInstance()
             .reference.child("post_images/${System.currentTimeMillis()}.jpg")
@@ -87,22 +100,18 @@ class WritingActivity : AppCompatActivity() {
     private fun savePostToFirestore(title: String, content: String, imageUrl: String?) {
         val db = FirebaseFirestore.getInstance()
         val postRef = db.collection("posts").document()
-
-        // 현재 로그인한 사용자와 UID 가져오기
-        val user = FirebaseAuth.getInstance().currentUser
-        if (user == null) {
+        val currentUser = FirebaseAuth.getInstance().currentUser
+        if (currentUser == null) {
             Toast.makeText(this, "로그인이 필요합니다.", Toast.LENGTH_SHORT).show()
             finish()
             return
         }
-        val userUid = user.uid
+        val uid = currentUser.uid
 
-        // user_profiles에서 nickname 가져오기
-        val profileRef = db.collection("user_profiles").document(userUid)
+        val profileRef = db.collection("user_profiles").document(uid)
         profileRef.get().addOnSuccessListener { document ->
             val nickname = document.getString("nickname") ?: "닉네임 없음"
-
-            // uid와 nickname을 포함하여 글 데이터 구성
+            // 해시태그도 함께 저장 (최대 5개)
             val postMap = hashMapOf(
                 "title" to title,
                 "content" to content,
@@ -111,10 +120,10 @@ class WritingActivity : AppCompatActivity() {
                 "views" to 0,
                 "postId" to postRef.id,
                 "imageUrl" to imageUrl,
-                "uid" to userUid,
-                "nickname" to nickname
+                "uid" to uid,
+                "nickname" to nickname,
+                "hashtags" to hashtagList  // 해시태그 필드 추가
             )
-
             postRef.set(postMap)
                 .addOnSuccessListener {
                     Toast.makeText(this, "게시글 저장됨", Toast.LENGTH_SHORT).show()
@@ -129,4 +138,3 @@ class WritingActivity : AppCompatActivity() {
         }
     }
 }
-

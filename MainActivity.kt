@@ -121,38 +121,33 @@ class MainActivity : AppCompatActivity() {
         loadPosts()  // Firestore에서 최신 게시글 데이터를 불러와 조회수 업데이트 반영
     }
 
-    // Firestore에서 게시글 불러오기 (uid와 nickname 포함)
     private fun loadPosts() {
         firestore.collection("posts")
             .whereEqualTo("category", currentCategory)
-            .get()
-            .addOnSuccessListener { result ->
-                val postList = mutableListOf<Post>()
-                for (document in result) {
-                    val title = document.getString("title") ?: ""
-                    val content = document.getString("content") ?: ""
-                    val category = document.getString("category") ?: ""
-                    val timestamp = document.getLong("timestamp") ?: 0L
-                    val views = document.getLong("views")?.toInt() ?: 0
-                    val postId = document.id
-                    val imageUrl = document.getString("imageUrl") ?: ""
-                    // uid와 nickname도 불러옵니다.
-                    val uid = document.getString("uid") ?: ""
-                    val nickname = document.getString("nickname") ?: ""
-                    postList.add(
-                        Post(title, content, category, timestamp, views, postId, imageUrl, uid, nickname)
-                    )
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Log.e("FirestoreError", "게시글 불러오기 실패: ${error.message}")
+                    return@addSnapshotListener
                 }
-                // 최신글 순 정렬
-                postList.sortByDescending { it.timestamp }
-                updateRecyclerView(postList)
-            }
-            .addOnFailureListener { exception ->
-                Log.e("FirestoreError", "게시글 불러오기 실패: ${exception.message}")
+                if (snapshot != null) {
+                    val postList = mutableListOf<Post>()
+                    for (document in snapshot.documents) {
+                        val title = document.getString("title") ?: ""
+                        val content = document.getString("content") ?: ""
+                        val category = document.getString("category") ?: ""
+                        val timestamp = document.getLong("timestamp") ?: 0L
+                        val views = document.getLong("views")?.toInt() ?: 0
+                        val postId = document.id
+                        val imageUrl = document.getString("imageUrl") ?: ""
+                        val uid = document.getString("uid") ?: ""
+                        val nickname = document.getString("nickname") ?: ""
+                        postList.add(Post(title, content, category, timestamp, views, postId, imageUrl, uid, nickname))
+                    }
+                    postList.sortByDescending { it.timestamp }
+                    updateRecyclerView(postList)
+                }
             }
     }
-
-    // 제목 검색 기능
     private fun searchPosts(query: String) {
         if (query.isEmpty()) {
             loadPosts()
@@ -165,12 +160,17 @@ class MainActivity : AppCompatActivity() {
                 val filteredList = mutableListOf<Post>()
                 for (document in result) {
                     val title = document.getString("title") ?: ""
+                    val nickname = document.getString("nickname") ?: ""
                     val content = document.getString("content") ?: ""
-                    val category = document.getString("category") ?: ""
-                    val timestamp = document.getLong("timestamp") ?: 0L
-                    val postId = document.id
-                    if (title.contains(query, ignoreCase = true)) {
-                        filteredList.add(Post(title, content, category, timestamp, postId = postId))
+                    if (title.contains(query, ignoreCase = true) ||
+                        nickname.contains(query, ignoreCase = true) ||
+                        content.contains(query, ignoreCase = true)) {
+                        val timestamp = document.getLong("timestamp") ?: 0L
+                        val views = document.getLong("views")?.toInt() ?: 0
+                        val postId = document.id
+                        val imageUrl = document.getString("imageUrl") ?: ""
+                        val uid = document.getString("uid") ?: ""
+                        filteredList.add(Post(title, content, currentCategory, timestamp, views, postId, imageUrl, uid, nickname))
                     }
                 }
                 updateRecyclerView(filteredList)
@@ -179,6 +179,8 @@ class MainActivity : AppCompatActivity() {
                 Log.e("FirestoreError", "검색 실패: ${exception.message}")
             }
     }
+
+
 
     private fun updateRecyclerView(posts: List<Post>) {
         when (currentCategory) {

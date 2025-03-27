@@ -5,7 +5,7 @@
     android:id="@+id/main"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#E7EBED"
+    android:background="@color/main_background"
     tools:context=".MainActivity">
 
     <!-- 리스트를 표시할 RecyclerView -->
@@ -85,23 +85,10 @@
             android:text="챔피언빌드"/>
     </LinearLayout>
 
-    <Button
-        android:id="@+id/button3"
-        android:layout_width="60dp"
-        android:layout_height="50dp"
-        android:layout_marginTop="5dp"
-        android:text="+"
-        android:textSize="22dp"
-        android:backgroundTint="#B1C1CE"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.91"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/fragment_container" />
-
     <FrameLayout
         android:id="@+id/fragment_container"
-        android:layout_width="388dp"
-        android:layout_height="471dp"
+        android:layout_width="384dp"
+        android:layout_height="0dp"
         android:layout_marginTop="16dp"
         android:background="@drawable/rounded_scrollview"
         app:layout_constraintBottom_toTopOf="@+id/bottomNavigation"
@@ -110,6 +97,7 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/linearLayout"
         app:layout_constraintVertical_bias="0.084">
+
         <TextView
             android:id="@+id/categoryTitle"
             android:layout_width="match_parent"
@@ -117,16 +105,28 @@
             android:layout_alignParentTop="true"
             android:gravity="center"
             android:padding="16dp"
-            android:visibility="gone"
             android:text="자유 게시판"
-            android:textSize="20sp" />
+            android:textSize="20sp"
+            android:visibility="gone" />
 
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/recyclerView"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:layout_marginTop="5dp" />
+
+        <!-- 버튼을 FrameLayout 내부에 추가하고, 오른쪽 아래에 위치시킴 -->
+        <Button
+            android:id="@+id/button3"
+            android:layout_width="60dp"
+            android:layout_height="50dp"
+            android:layout_gravity="end|bottom"
+            android:layout_margin="16dp"
+            android:backgroundTint="#B1C1CE"
+            android:text="+"
+            android:textSize="22dp" />
     </FrameLayout>
+
 
     <EditText
         android:id="@+id/search_edit_text"
@@ -135,7 +135,7 @@
         android:layout_marginTop="12dp"
         android:layout_weight="1"
         android:background="@drawable/scrollview"
-        android:hint="닉네임 + #태그검색"
+        android:hint="제목 + 닉네임 + 내용"
         android:padding="8dp"
         android:textSize="16sp"
         app:layout_constraintEnd_toEndOf="parent"

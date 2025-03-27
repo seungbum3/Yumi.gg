@@ -6,6 +6,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.*
+import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -27,6 +28,8 @@ class PostDetailFragment : Fragment() {
 
     private lateinit var firestore: FirebaseFirestore
     private var postId: String = ""
+    // 게시글 작성자의 uid를 저장 (삭제 버튼 보임 여부 결정)
+    private var postAuthorUid: String = ""
 
     // UI 요소들
     private lateinit var detailPostTitle: TextView
@@ -36,12 +39,18 @@ class PostDetailFragment : Fragment() {
     private lateinit var detailPostViewCount: TextView
     private lateinit var detailPostImage: ImageView
     private lateinit var detailPostNickname: TextView
+    // 해시태그 표시 TextView
+    private lateinit var hashtagTextView: TextView
 
+    // 댓글 관련 UI
     private lateinit var commentEditText: EditText
     private lateinit var commentSendButton: Button
     private lateinit var commentRecyclerView: RecyclerView
     private lateinit var commentAdapter: CommentAdapter
     private var comments = mutableListOf<Comment>()
+
+    // 삭제 기능을 위한 "삭제" 텍스트뷰
+    private lateinit var deleteTextView: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -58,6 +67,7 @@ class PostDetailFragment : Fragment() {
         detailPostViewCount = view.findViewById(R.id.detail_post_view_count)
         detailPostImage = view.findViewById(R.id.detail_post_image)
         detailPostNickname = view.findViewById(R.id.detail_post_nickname)
+        hashtagTextView = view.findViewById(R.id.hashtagTextView)
 
         commentEditText = view.findViewById(R.id.commentEditText)
         commentSendButton = view.findViewById(R.id.commentSendButton)
@@ -65,6 +75,10 @@ class PostDetailFragment : Fragment() {
         commentRecyclerView.layoutManager = LinearLayoutManager(context)
         commentAdapter = CommentAdapter(comments)
         commentRecyclerView.adapter = commentAdapter
+
+        // 삭제 텍스트뷰 초기화 및 클릭 리스너 설정
+        deleteTextView = view.findViewById(R.id.deleteTextView)
+        deleteTextView.setOnClickListener { showDeleteConfirmation() }
 
         commentSendButton.setOnClickListener {
             val commentText = commentEditText.text.toString().trim()
@@ -79,8 +93,6 @@ class PostDetailFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-
-        // 게시글 로드 및 조회수 증가
         if (postId.isNotEmpty()) {
             val postRef = firestore.collection("posts").document(postId)
             postRef.update("views", FieldValue.increment(1))
@@ -99,21 +111,14 @@ class PostDetailFragment : Fragment() {
             Toast.makeText(context, "Invalid post ID", Toast.LENGTH_SHORT).show()
         }
 
-        // 뒤로가기 버튼 처리
         val backButton: ImageView = view.findViewById(R.id.backButton)
-        backButton.setOnClickListener {
-            requireActivity().onBackPressed()
-        }
+        backButton.setOnClickListener { requireActivity().onBackPressed() }
 
-        // [댓글] 텍스트뷰와 댓글 영역 토글 처리
         val toggleCommentText: TextView = view.findViewById(R.id.toggleCommentText)
         val commentInputLayout: View = view.findViewById(R.id.commentInputContainer)
         val commentRecyclerView: View = view.findViewById(R.id.commentRecyclerView)
-
-        // 초기 상태: 댓글 입력 영역과 댓글 목록 숨김
         commentInputLayout.visibility = View.GONE
         commentRecyclerView.visibility = View.GONE
-
         var isCommentVisible = false
         toggleCommentText.setOnClickListener {
             isCommentVisible = !isCommentVisible
@@ -127,6 +132,7 @@ class PostDetailFragment : Fragment() {
         }
     }
 
+    // 게시글 상세 정보를 불러오는 함수 (작성자 uid 및 해시태그 포함)
     private fun loadPostDetails(postId: String) {
         val postRef = firestore.collection("posts").document(postId)
         postRef.get()
@@ -138,6 +144,9 @@ class PostDetailFragment : Fragment() {
                     val timestamp = document.getLong("timestamp") ?: 0L
                     val imageUrl = document.getString("imageUrl") ?: ""
                     val nickname = document.getString("nickname") ?: "닉네임 없음"
+                    // 게시글 작성자 uid와 해시태그 읽기
+                    postAuthorUid = document.getString("uid") ?: ""
+                    val hashtags = document.get("hashtags") as? List<String> ?: emptyList()
 
                     detailPostTitle.text = title
                     detailPostContent.text = content
@@ -153,6 +162,16 @@ class PostDetailFragment : Fragment() {
                     } else {
                         detailPostImage.visibility = View.GONE
                     }
+
+                    // 현재 로그인한 사용자의 uid와 비교해서 "삭제" 버튼 보임 여부 설정
+                    val currentUserUid = FirebaseAuth.getInstance().currentUser?.uid
+                    if (currentUserUid != null && currentUserUid == postAuthorUid) {
+                        deleteTextView.visibility = View.VISIBLE
+                    } else {
+                        deleteTextView.visibility = View.GONE
+                    }
+                    // 해시태그 TextView에 표시
+                    hashtagTextView.text = hashtags.joinToString(", ")
                 } else {
                     Toast.makeText(context, "게시글을 찾을 수 없습니다.", Toast.LENGTH_SHORT).show()
                 }
@@ -197,7 +216,6 @@ class PostDetailFragment : Fragment() {
             }
     }
 
-    // loadComments 함수 수정: 댓글을 불러온 후 toggleCommentText에 댓글 개수를 업데이트합니다.
     private fun loadComments(postId: String) {
         firestore.collection("posts")
             .document(postId)
@@ -214,12 +232,78 @@ class PostDetailFragment : Fragment() {
                     comments.add(Comment(commentText, timestamp, uid, nickname))
                 }
                 commentAdapter.notifyDataSetChanged()
-                // 댓글 수에 따라 [댓글] 텍스트뷰 업데이트
                 val toggleCommentText: TextView? = view?.findViewById(R.id.toggleCommentText)
                 toggleCommentText?.text = "댓글[${comments.size}]"
             }
             .addOnFailureListener { exception ->
                 Toast.makeText(context, "댓글 불러오기 실패: ${exception.message}", Toast.LENGTH_SHORT).show()
+            }
+    }
+    private fun showDeleteConfirmation() {
+        AlertDialog.Builder(requireContext())
+            .setTitle("게시글 삭제")
+            .setMessage("게시글을 삭제하시겠습니까?")
+            .setPositiveButton("삭제") { _, _ -> deletePost() }
+            .setNegativeButton("취소") { dialog, _ -> dialog.dismiss() }
+            .show()
+    }
+
+    private fun deletePost() {
+        firestore.collection("posts").document(postId)
+            .delete()
+            .addOnSuccessListener {
+                Toast.makeText(context, "게시글이 삭제되었습니다.", Toast.LENGTH_SHORT).show()
+                requireActivity().onBackPressed()
+            }
+            .addOnFailureListener { e ->
+                Toast.makeText(context, "게시글 삭제 실패: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+    }
+
+    private fun showReplyDialog(comment: Comment) {
+        val builder = AlertDialog.Builder(requireContext())
+        builder.setTitle("답글 입력")
+        val editText = EditText(requireContext())
+        builder.setView(editText)
+        builder.setPositiveButton("전송") { _, _ ->
+            val replyText = editText.text.toString().trim()
+            if (replyText.isNotEmpty()) {
+                postReply(comment, replyText)
+            } else {
+                Toast.makeText(requireContext(), "답글을 입력하세요", Toast.LENGTH_SHORT).show()
+            }
+        }
+        builder.setNegativeButton("취소") { dialog, _ ->
+            dialog.dismiss()
+        }
+        builder.show()
+    }
+
+    // 참고: 현재 Comment 데이터 클래스에는 id 필드가 없으므로, 실제 구현 시 id를 포함해야 합니다.
+    private fun postReply(comment: Comment, replyText: String) {
+        val currentUser = FirebaseAuth.getInstance().currentUser
+        if (currentUser == null) {
+            Toast.makeText(context, "로그인이 필요합니다", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val uid = currentUser.uid
+
+        firestore.collection("posts")
+            .document(postId)
+            .collection("comments")
+            .document("댓글문서ID")  // 실제 댓글 문서 ID로 수정 필요
+            .collection("replies")
+            .add(hashMapOf(
+                "text" to replyText,
+                "timestamp" to System.currentTimeMillis(),
+                "uid" to uid,
+                "nickname" to (comment.nickname ?: "닉네임 없음")
+            ))
+            .addOnSuccessListener {
+                Toast.makeText(context, "답글 저장 성공", Toast.LENGTH_SHORT).show()
+            }
+            .addOnFailureListener { e ->
+                Toast.makeText(context, "답글 저장 실패: ${e.message}", Toast.LENGTH_SHORT).show()
             }
     }
 }

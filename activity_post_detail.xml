@@ -35,6 +35,18 @@
                 app:layout_constraintTop_toTopOf="parent"
                 app:layout_constraintStart_toStartOf="parent" />
 
+            <TextView
+                android:id="@+id/deleteTextView"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="삭제"
+                android:textColor="#FF0000"
+                android:textSize="16sp"
+                android:visibility="gone"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                android:padding="8dp"/>
+
             <!-- 게시글 제목 -->
             <TextView
                 android:id="@+id/detail_post_title"
@@ -129,7 +141,23 @@
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintEnd_toEndOf="parent" />
 
+
             <!-- [댓글] 텍스트뷰 (댓글 개수 업데이트는 코드에서 처리) -->
+
+            <TextView
+                android:id="@+id/hashtagTextView"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:padding="8dp"
+                android:text="헤시테그"
+                android:textColor="#999999"
+                android:textSize="14sp"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintHorizontal_bias="0.591"
+                app:layout_constraintStart_toEndOf="@+id/toggleCommentText"
+                app:layout_constraintTop_toBottomOf="@id/detail_post_content" />
+
             <TextView
                 android:id="@+id/toggleCommentText"
                 android:layout_width="wrap_content"

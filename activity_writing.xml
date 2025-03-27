@@ -3,7 +3,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#E7EBED"
+    android:background="@color/main_background"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
 
@@ -55,6 +55,23 @@
         </LinearLayout>
     </ScrollView>
 
+    <!-- 해시태그를 보여줄 TextView 추가 -->
+
+
+    <TextView
+        android:id="@+id/hashtagTextView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:padding="8dp"
+        android:text="해시태그 추가"
+        android:textColor="#007AFF"
+        android:textSize="16sp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.933"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/scrollView3" />
+
     <ImageView
         android:id="@+id/imageView"
         android:layout_width="114dp"
@@ -96,5 +113,7 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
         app:srcCompat="?attr/homeAsUpIndicator" />
+
+
 
 </androidx.constraintlayout.widget.ConstraintLayout>
