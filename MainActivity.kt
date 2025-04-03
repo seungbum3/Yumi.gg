@@ -9,6 +9,7 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -70,17 +71,31 @@ class MainActivity : AppCompatActivity() {
         textRank.setOnClickListener { changeCategory("랭크") }
         textNormal.setOnClickListener { changeCategory("일반") }
         textChampion.setOnClickListener { changeCategory("챔피언 빌드") }
+        // 기존 writeButton 변수는 다음과 같이 정의되어 있다고 가정합니다.
         val writeButton = findViewById<Button>(R.id.button3)
+        // + 버튼 클릭 시 다이얼로그를 띄워 옵션을 선택하도록 처리합니다.
         writeButton.setOnClickListener {
-            val currentUser = FirebaseAuth.getInstance().currentUser
-            if (currentUser != null) {
-                // 현재 선택된 카테고리를 인텐트에 담아서 글쓰기 화면으로 이동
-                val intent = Intent(this, WritingActivity::class.java)
-                intent.putExtra("category", currentCategory)
-                startActivityForResult(intent, 1)
-            } else {
-                Toast.makeText(this, "로그인이 필요합니다.", Toast.LENGTH_SHORT).show()
-            }
+            // "새게시글"과 "임시저장" 옵션을 배열에 담습니다.
+            val options = arrayOf("새게시글", "임시저장")
+            // AlertDialog를 생성하여 옵션을 보여줍니다.
+            AlertDialog.Builder(this)
+                .setTitle("")
+                .setItems(options) { dialog, which ->
+                    when (which) {
+                        0 -> {
+                            // 새게시글 선택: 기존의 WritingActivity를 실행합니다.
+                            val intent = Intent(this, WritingActivity::class.java)
+                            intent.putExtra("category", currentCategory)  // 현재 카테고리 전달
+                            startActivityForResult(intent, 1)
+                        }
+                        1 -> {
+                            // 임시저장 선택: 임시저장된 게시글 목록을 확인할 TempPostsActivity를 실행합니다.
+                            val intent = Intent(this, TempPostsActivity::class.java)
+                            startActivity(intent)
+                        }
+                    }
+                }
+                .show()
         }
         val bottomNavigationView = findViewById<BottomNavigationView>(R.id.bottomNavigation)
         bottomNavigationView.selectedItemId = R.id.category4
